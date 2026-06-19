@@ -1,5 +1,6 @@
 package com.betsim.security;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,6 +42,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated())
+            // Sin autenticación válida -> 401 (no 403), para que el cliente renueve o vuelva al login.
+            .exceptionHandling(e -> e.authenticationEntryPoint(
+                (request, response, ex) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No autenticado")))
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

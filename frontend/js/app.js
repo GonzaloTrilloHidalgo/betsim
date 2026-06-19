@@ -22,13 +22,25 @@ async function api(path, { method = 'GET', body, auth = true, retry = true } = {
   if (auth && store.access) headers['Authorization'] = `Bearer ${store.access}`;
   const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
 
-  if (res.status === 401 && auth && retry && store.refresh) {
-    const ok = await tryRefresh();
+  // Sesión inválida/caducada (401, o 403 de configuraciones antiguas): renovar o volver al login.
+  if ((res.status === 401 || res.status === 403) && auth && retry) {
+    const ok = store.refresh ? await tryRefresh() : false;
     if (ok) return api(path, { method, body, auth, retry: false });
+    forceLogin();
+    throw new Error('Tu sesión ha caducado. Vuelve a entrar.');
   }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) throw new Error((data && data.message) || `Error ${res.status}`);
   return data;
+}
+
+/** Limpia la sesión y muestra la pantalla de login (cuando el token ya no sirve). */
+function forceLogin() {
+  store.clear();
+  slip = [];
+  const app = $('#app'); const auth = $('#auth-screen');
+  if (app) app.classList.add('hidden');
+  if (auth) { auth.classList.remove('hidden'); switchAuth('login'); }
 }
 
 async function tryRefresh() {
