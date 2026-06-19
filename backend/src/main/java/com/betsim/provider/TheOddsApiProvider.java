@@ -78,18 +78,19 @@ public class TheOddsApiProvider implements SportsDataProvider {
             String home = (String) ev.get("home_team");
             String away = (String) ev.get("away_team");
             Instant kickoff = Instant.parse((String) ev.get("commence_time"));
+            // Mejor cuota disponible (la más alta entre todas las casas) para cada resultado.
             BigDecimal cl = null, ce = null, cv = null;
             List<Map<String, Object>> books = (List<Map<String, Object>>) ev.getOrDefault("bookmakers", List.of());
-            if (!books.isEmpty()) {
-                List<Map<String, Object>> markets = (List<Map<String, Object>>) books.get(0).getOrDefault("markets", List.of());
+            for (Map<String, Object> book : books) {
+                List<Map<String, Object>> markets = (List<Map<String, Object>>) book.getOrDefault("markets", List.of());
                 for (Map<String, Object> mk : markets) {
                     if (!"h2h".equals(mk.get("key"))) continue;
                     for (Map<String, Object> oc : (List<Map<String, Object>>) mk.getOrDefault("outcomes", List.of())) {
                         String name = (String) oc.get("name");
                         BigDecimal price = new BigDecimal(String.valueOf(oc.get("price")));
-                        if (name.equalsIgnoreCase(home)) cl = price;
-                        else if (name.equalsIgnoreCase(away)) cv = price;
-                        else ce = price; // "Draw"
+                        if (name.equalsIgnoreCase(home)) cl = max(cl, price);
+                        else if (name.equalsIgnoreCase(away)) cv = max(cv, price);
+                        else ce = max(ce, price); // "Draw"
                     }
                 }
             }
@@ -97,8 +98,12 @@ public class TheOddsApiProvider implements SportsDataProvider {
             // The Odds API no aporta la fase del torneo -> la dejamos sin etiqueta (null).
             out.add(new ProviderMatch((String) ev.get("id"), home, away, kickoff, null, cl, ce, cv));
         }
-        log.info("The Odds API: {} partidos con cuotas 1X2 obtenidos.", out.size());
+        log.info("The Odds API: {} partidos con cuotas 1X2 obtenidos (mejor cuota disponible).", out.size());
         return out;
+    }
+
+    private static BigDecimal max(BigDecimal current, BigDecimal candidate) {
+        return (current == null || candidate.compareTo(current) > 0) ? candidate : current;
     }
 
     @Override
