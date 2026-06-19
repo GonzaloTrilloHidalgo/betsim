@@ -29,10 +29,15 @@ public class OpcionCuota {
     @Column(nullable = false)
     private boolean disponible = true;
 
+    @Column(length = 60)
+    private String casa;
+
     @Column(name = "actualizado_en", nullable = false)
     private Instant actualizadoEn = Instant.now();
 
     public Long getId() { return id; }
+    public String getCasa() { return casa; }
+    public void setCasa(String casa) { this.casa = casa; }
     public Mercado getMercado() { return mercado; }
     public void setMercado(Mercado mercado) { this.mercado = mercado; }
     public String getCodigo() { return codigo; }

@@ -78,32 +78,40 @@ public class TheOddsApiProvider implements SportsDataProvider {
             String home = (String) ev.get("home_team");
             String away = (String) ev.get("away_team");
             Instant kickoff = Instant.parse((String) ev.get("commence_time"));
-            // Mejor cuota disponible (la más alta entre todas las casas) para cada resultado.
-            BigDecimal cl = null, ce = null, cv = null;
+            // Mejor cuota disponible (la más alta entre todas las casas) para cada resultado,
+            // guardando además qué casa la ofrece.
+            Best local = new Best(), draw = new Best(), visit = new Best();
             List<Map<String, Object>> books = (List<Map<String, Object>>) ev.getOrDefault("bookmakers", List.of());
             for (Map<String, Object> book : books) {
+                String casa = (String) book.getOrDefault("title", book.get("key"));
                 List<Map<String, Object>> markets = (List<Map<String, Object>>) book.getOrDefault("markets", List.of());
                 for (Map<String, Object> mk : markets) {
                     if (!"h2h".equals(mk.get("key"))) continue;
                     for (Map<String, Object> oc : (List<Map<String, Object>>) mk.getOrDefault("outcomes", List.of())) {
                         String name = (String) oc.get("name");
                         BigDecimal price = new BigDecimal(String.valueOf(oc.get("price")));
-                        if (name.equalsIgnoreCase(home)) cl = max(cl, price);
-                        else if (name.equalsIgnoreCase(away)) cv = max(cv, price);
-                        else ce = max(ce, price); // "Draw"
+                        if (name.equalsIgnoreCase(home)) local.offer(price, casa);
+                        else if (name.equalsIgnoreCase(away)) visit.offer(price, casa);
+                        else draw.offer(price, casa); // "Draw"
                     }
                 }
             }
-            if (cl == null || ce == null || cv == null) continue; // sin cuotas 1X2 completas, lo ignoramos
+            if (local.price == null || draw.price == null || visit.price == null) continue; // sin 1X2 completo
             // The Odds API no aporta la fase del torneo -> la dejamos sin etiqueta (null).
-            out.add(new ProviderMatch((String) ev.get("id"), home, away, kickoff, null, cl, ce, cv));
+            out.add(new ProviderMatch((String) ev.get("id"), home, away, kickoff, null,
+                    local.price, draw.price, visit.price, local.casa, draw.casa, visit.casa));
         }
         log.info("The Odds API: {} partidos con cuotas 1X2 obtenidos (mejor cuota disponible).", out.size());
         return out;
     }
 
-    private static BigDecimal max(BigDecimal current, BigDecimal candidate) {
-        return (current == null || candidate.compareTo(current) > 0) ? candidate : current;
+    /** Acumula la mejor (más alta) cuota vista y la casa que la ofrece. */
+    private static final class Best {
+        BigDecimal price;
+        String casa;
+        void offer(BigDecimal candidate, String book) {
+            if (price == null || candidate.compareTo(price) > 0) { price = candidate; casa = book; }
+        }
     }
 
     @Override

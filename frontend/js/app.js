@@ -49,6 +49,40 @@ function fmtDate(iso) {
 }
 const ESTADO_COLOR = { PENDIENTE: 'text-amber-400', GANADA: 'text-green-400', PERDIDA: 'text-red-400', ANULADA: 'text-slate-400' };
 
+/* ---------------- Banderas ---------------- */
+// Mapa selección -> código de país (ISO alpha-2; sub-regiones de UK con gb-xxx).
+// Incluye nombres en inglés (datos reales de The Odds API) y en español (mock).
+const FLAGS = {
+  // English (The Odds API)
+  'spain': 'es', 'germany': 'de', 'france': 'fr', 'england': 'gb-eng', 'scotland': 'gb-sct',
+  'wales': 'gb-wls', 'northern ireland': 'gb-nir', 'argentina': 'ar', 'brazil': 'br', 'portugal': 'pt',
+  'netherlands': 'nl', 'italy': 'it', 'croatia': 'hr', 'mexico': 'mx', 'united states': 'us', 'usa': 'us',
+  'belgium': 'be', 'uruguay': 'uy', 'morocco': 'ma', 'senegal': 'sn', 'japan': 'jp', 'south korea': 'kr',
+  'korea republic': 'kr', 'colombia': 'co', 'ecuador': 'ec', 'canada': 'ca', 'qatar': 'qa',
+  'switzerland': 'ch', 'denmark': 'dk', 'poland': 'pl', 'serbia': 'rs', 'ghana': 'gh', 'cameroon': 'cm',
+  'nigeria': 'ng', 'australia': 'au', 'saudi arabia': 'sa', 'iran': 'ir', 'tunisia': 'tn',
+  'costa rica': 'cr', 'peru': 'pe', 'chile': 'cl', 'norway': 'no', 'sweden': 'se', 'austria': 'at',
+  'hungary': 'hu', 'turkey': 'tr', 'turkiye': 'tr', 'greece': 'gr', 'egypt': 'eg', 'algeria': 'dz',
+  'ivory coast': 'ci', "cote d'ivoire": 'ci', 'ukraine': 'ua', 'czechia': 'cz', 'czech republic': 'cz',
+  'paraguay': 'py', 'venezuela': 've', 'bolivia': 'bo', 'panama': 'pa', 'jamaica': 'jm',
+  'new zealand': 'nz', 'south africa': 'za', 'mali': 'ml', 'cape verde': 'cv', "cabo verde": 'cv',
+  // Español (mock y por si acaso)
+  'españa': 'es', 'alemania': 'de', 'francia': 'fr', 'inglaterra': 'gb-eng', 'escocia': 'gb-sct',
+  'gales': 'gb-wls', 'brasil': 'br', 'países bajos': 'nl', 'paises bajos': 'nl', 'holanda': 'nl',
+  'italia': 'it', 'croacia': 'hr', 'méxico': 'mx', 'estados unidos': 'us', 'bélgica': 'be',
+  'marruecos': 'ma', 'japón': 'jp', 'corea del sur': 'kr', 'suiza': 'ch', 'dinamarca': 'dk',
+  'polonia': 'pl', 'camerún': 'cm', 'arabia saudí': 'sa', 'irán': 'ir', 'túnez': 'tn',
+  'costa de marfil': 'ci', 'noruega': 'no', 'suecia': 'se', 'turquía': 'tr', 'grecia': 'gr',
+  'egipto': 'eg', 'argelia': 'dz', 'ucrania': 'ua', 'chequia': 'cz', 'sudáfrica': 'za',
+};
+
+function flag(name) {
+  const code = FLAGS[(name || '').trim().toLowerCase()];
+  if (!code) return '';
+  return `<img src="https://flagcdn.com/24x18/${code}.png" alt="" loading="lazy"
+            class="inline-block w-5 h-auto rounded-sm shrink-0 align-middle" />`;
+}
+
 /* ---------------- Autenticación ---------------- */
 let authMode = 'login';
 function setupAuth() {
@@ -113,7 +147,8 @@ async function renderCartelera() {
   try {
     const matches = await api('/matches');
     if (!matches.length) { c.innerHTML = `<div class="text-center text-slate-500 py-10">No hay partidos disponibles.</div>`; return; }
-    c.innerHTML = matches.map(matchCard).join('');
+    c.innerHTML = `<div class="mx-auto w-full max-w-5xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      ${matches.map(matchCard).join('')}</div>`;
     c.querySelectorAll('[data-opt]').forEach((btn) => {
       btn.onclick = () => toggleSelection(btn);
     });
@@ -128,21 +163,24 @@ function matchCard(m) {
   const opts = mkt ? mkt.opciones : [];
   const oddBtn = (o) => o ? `
     <button data-opt="${o.id}" data-cuota="${o.cuota}" data-label="${m.equipoLocal} vs ${m.equipoVisitante} · ${o.descripcion}"
-            class="flex-1 bg-slate-700 rounded-xl py-2 active:bg-slate-600 transition">
-      <div class="text-[11px] text-slate-400">${o.codigo === 'LOCAL' ? '1' : o.codigo === 'EMPATE' ? 'X' : '2'}</div>
-      <div class="font-bold">${fmt(o.cuota)}</div>
+            class="flex-1 min-w-0 bg-slate-700 rounded-lg py-1.5 active:bg-slate-600 transition">
+      <div class="text-[10px] text-slate-400">${o.codigo === 'LOCAL' ? '1' : o.codigo === 'EMPATE' ? 'X' : '2'}</div>
+      <div class="font-bold text-sm">${fmt(o.cuota)}</div>
+      ${o.casa ? `<div class="text-[9px] text-slate-500 truncate px-1" title="${o.casa}">${o.casa}</div>` : ''}
     </button>` : `<div class="flex-1"></div>`;
   const find = (code) => opts.find((o) => o.codigo === code);
   return `
-    <div class="bg-slate-800 rounded-2xl p-4 mb-3">
-      <div class="flex justify-between items-center mb-3">
-        <div class="text-[11px] text-slate-400">${m.fase || ''}</div>
-        <div class="text-[11px] text-slate-400">${fmtDate(m.inicioUtc)}</div>
+    <div class="bg-slate-800 rounded-xl p-3">
+      <div class="flex justify-between items-center mb-2">
+        <div class="text-[10px] text-slate-400">${m.fase || ''}</div>
+        <div class="text-[10px] text-slate-400">${fmtDate(m.inicioUtc)}</div>
       </div>
-      <div class="flex justify-between items-center mb-3 font-semibold">
-        <span>${m.equipoLocal}</span><span class="text-slate-500 text-sm">vs</span><span>${m.equipoVisitante}</span>
+      <div class="flex items-center justify-between mb-2 text-sm font-semibold gap-1">
+        <span class="flex items-center gap-1 flex-1 min-w-0">${flag(m.equipoLocal)}<span class="truncate">${m.equipoLocal}</span></span>
+        <span class="text-slate-500 text-xs px-1">vs</span>
+        <span class="flex items-center gap-1 flex-1 min-w-0 justify-end"><span class="truncate">${m.equipoVisitante}</span>${flag(m.equipoVisitante)}</span>
       </div>
-      <div class="flex gap-2">
+      <div class="flex gap-1.5">
         ${oddBtn(find('LOCAL'))}${oddBtn(find('EMPATE'))}${oddBtn(find('VISITANTE'))}
       </div>
     </div>`;
@@ -248,11 +286,13 @@ let apuestasFilter = 'PENDIENTE';
 async function renderApuestas() {
   const c = $('#content');
   c.innerHTML = `
-    <div class="flex bg-slate-800 rounded-xl p-1 mb-4">
-      <button id="f-pend" class="flex-1 py-2 rounded-lg text-sm font-semibold">Pendientes</button>
-      <button id="f-res" class="flex-1 py-2 rounded-lg text-sm font-semibold">Resueltas</button>
-    </div>
-    <div id="bets-list"><div class="text-center text-slate-500 py-10">Cargando…</div></div>`;
+    <div class="mx-auto w-full max-w-2xl">
+      <div class="flex bg-slate-800 rounded-xl p-1 mb-4">
+        <button id="f-pend" class="flex-1 py-2 rounded-lg text-sm font-semibold">Pendientes</button>
+        <button id="f-res" class="flex-1 py-2 rounded-lg text-sm font-semibold">Resueltas</button>
+      </div>
+      <div id="bets-list"><div class="text-center text-slate-500 py-10">Cargando…</div></div>
+    </div>`;
   $('#f-pend').onclick = () => { apuestasFilter = 'PENDIENTE'; renderApuestas(); };
   $('#f-res').onclick = () => { apuestasFilter = 'RESUELTO'; renderApuestas(); };
   const pend = apuestasFilter === 'PENDIENTE';
@@ -300,6 +340,7 @@ async function renderBilletera() {
       api('/wallet'), api('/wallet/transactions'), api('/leaderboard'),
     ]);
     c.innerHTML = `
+     <div class="mx-auto w-full max-w-2xl">
       <div class="bg-gradient-to-br from-green-700 to-green-600 rounded-2xl p-5 mb-4">
         <div class="text-green-100 text-sm">Saldo disponible</div>
         <div class="text-4xl font-extrabold">${fmt(wallet.saldo)}</div>
@@ -328,7 +369,8 @@ async function renderBilletera() {
             <span class="${Number(t.importe) >= 0 ? 'text-green-400' : 'text-red-400'} font-semibold">${Number(t.importe) >= 0 ? '+' : ''}${fmt(t.importe)}</span>
           </div>`).join('') || '<div class="text-slate-500 text-sm text-center py-4">Sin movimientos.</div>'}
       </div>
-      <button id="btn-logout" class="w-full py-3 rounded-xl bg-slate-800 text-red-400 font-semibold">Cerrar sesión</button>`;
+      <button id="btn-logout" class="w-full py-3 rounded-xl bg-slate-800 text-red-400 font-semibold">Cerrar sesión</button>
+     </div>`;
 
     $('#btn-bonus').onclick = async () => {
       try { const w = await api('/wallet/daily-bonus', { method: 'POST' }); flashWallet('¡Bono reclamado! +10', true); updateBalance(w.saldo); }

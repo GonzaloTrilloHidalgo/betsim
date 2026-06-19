@@ -60,16 +60,16 @@ public class IngestService {
             Mercado mercado = mercados.findByPartidoIdAndTipo(p.getId(), TipoMercado.UNO_X_DOS)
                     .orElseGet(() -> mercados.save(new Mercado(p, TipoMercado.UNO_X_DOS)));
 
-            upsertOpcion(mercado, "LOCAL", p.getEquipoLocal(), pm.cuotaLocal());
-            upsertOpcion(mercado, "EMPATE", "Empate", pm.cuotaEmpate());
-            upsertOpcion(mercado, "VISITANTE", p.getEquipoVisitante(), pm.cuotaVisitante());
+            upsertOpcion(mercado, "LOCAL", p.getEquipoLocal(), pm.cuotaLocal(), pm.casaLocal());
+            upsertOpcion(mercado, "EMPATE", "Empate", pm.cuotaEmpate(), pm.casaEmpate());
+            upsertOpcion(mercado, "VISITANTE", p.getEquipoVisitante(), pm.cuotaVisitante(), pm.casaVisitante());
             procesados++;
         }
         log.info("Ingesta completada: {} partidos sincronizados", procesados);
         return procesados;
     }
 
-    private void upsertOpcion(Mercado mercado, String codigo, String descripcion, BigDecimal cuota) {
+    private void upsertOpcion(Mercado mercado, String codigo, String descripcion, BigDecimal cuota, String casa) {
         OpcionCuota oc = opciones.findByMercadoIdAndCodigo(mercado.getId(), codigo).orElseGet(() -> {
             OpcionCuota nueva = new OpcionCuota();
             nueva.setMercado(mercado);
@@ -78,6 +78,7 @@ public class IngestService {
         });
         oc.setDescripcion(descripcion);
         oc.setCuota(cuota);
+        oc.setCasa(casa);
         oc.setDisponible(true);
         oc.setActualizadoEn(Instant.now());
         opciones.save(oc);

@@ -9,7 +9,7 @@ import java.time.Instant;
 public final class ProviderDtos {
     private ProviderDtos() {}
 
-    /** Partido + cuotas 1X2 tal como lo entrega el proveedor de cuotas. */
+    /** Partido + cuotas 1X2 (con la casa que ofrece cada cuota) tal como lo entrega el proveedor. */
     public record ProviderMatch(
             String externalId,
             String equipoLocal,
@@ -18,7 +18,10 @@ public final class ProviderDtos {
             Fase fase,
             BigDecimal cuotaLocal,
             BigDecimal cuotaEmpate,
-            BigDecimal cuotaVisitante) {}
+            BigDecimal cuotaVisitante,
+            String casaLocal,
+            String casaEmpate,
+            String casaVisitante) {}
 
     /** Resultado final (a 90 min) entregado por el proveedor de resultados. */
     public record ProviderResult(
