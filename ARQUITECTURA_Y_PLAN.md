@@ -15,15 +15,23 @@ el caso de uso real es **"jugar con amigos"**. Eso cambia varias prioridades.
 |------|--------------------|-----------------------|--------|
 | Tipos de apuesta | Simples (1X2) + Combinadas | **Ambas**, mercado único **1X2** | Es el núcleo del producto |
 | Apuestas en vivo (live) | Ambiguo | **Solo pre-partido** | Live multiplica la complejidad (latencia, settlement parcial) |
-| Mercados | "Mercados" en plural | **Solo 1X2** (1=local, X=empate, 2=visitante) | Un mercado bien hecho > cinco a medias |
+| Mercados | "Mercados" en plural | **1X2** + **Goleador (marca en cualquier momento)** | Dos mercados que cubren lo más popular; el modelo queda generalizado para añadir más |
 | Competición | "Ligas internacionales" | **Mundial 2026** (un solo torneo, `sport_key = soccer_fifa_world_cup`) | El torneo está en juego ahora (11 jun – 19 jul 2026); acotado y barato en API |
-| API externa | API-Football *o* The Odds API | **The Odds API** (una sola) | Las cuotas son el centro; su free tier es más generoso para odds |
+| API externa | API-Football *o* The Odds API | **The Odds API** (cuotas) + **fuente de resultados de goleadores** (ver §2) | The Odds API no da quién marcó; los props de jugador necesitan un proveedor de resultados |
 | Liquidación 1X2 en eliminatorias | No contemplado | **Resultado de los 90 min** (la X sigue válida aunque haya prórroga/penaltis) | Es el estándar de las casas reales para el mercado 1X2 |
+| Liquidación Goleador | No contemplado | **Goles en los 90 min** (no cuenta prórroga/penaltis); autogoles no cuentan al jugador | Estándar de "marca en cualquier momento" |
 | Leaderboard entre amigos | No aparece | **Sí, incluido en MVP**, métrica = **beneficio neto histórico** | Es *la* función social que hace divertido jugar con amigos; premia acierto sostenido, no suerte |
 | Recarga / reclamo diario | Mencionado sin reglas | **Bono diario fijo + reset manual** | Reglas simples y claras |
 
 **Out of scope del MVP** (candidatos a v2): apuestas en vivo, mercados adicionales (over/under, hándicap,
-ambos marcan), cash-out, notificaciones push, chat entre amigos, multi-divisa.
+ambos marcan, **primer/último goleador**), cash-out, notificaciones push, chat entre amigos, multi-divisa.
+
+> **Nota sobre el mercado de goleadores:** se incluye, pero tiene dos costes reales que conviene conocer
+> (detallados en §2): (1) las cuotas de *player props* en The Odds API suelen requerir **plan de pago** y
+> consumen más créditos; y (2) **liquidar** un acierto de goleador exige saber **quién marcó**, dato que
+> The Odds API **no** proporciona → hace falta una **segunda fuente de resultados** (p. ej. API-Football).
+> Por eso lo planificamos como un **fast-follow (v1.1)**: el modelo de datos lo soporta desde el día 1,
+> pero se implementa justo después de tener el 1X2 funcionando de punta a punta.
 
 ---
 
@@ -44,6 +52,21 @@ Estimación con **un solo torneo**, refresco de cuotas cada **30 min** en ventan
 
 > Ventaja clave del Mundial: es un evento **acotado en el tiempo**. No hay coste recurrente indefinido; el
 > grupo juega durante las ~5 semanas del torneo y listo.
+
+**Coste añadido por el mercado de goleadores (player props):**
+
+- En The Odds API los mercados de jugador (`player_goal_scorer_anytime`) van por un **endpoint por evento**
+  (`/events/{id}/odds`) y cuestan **más créditos por llamada** que el 1X2 del listado, además de requerir
+  normalmente un **plan de pago**. Estimación: refrescar props solo de partidos < 24 h, 1 vez/hora, son
+  unos pocos partidos/día → manejable, pero **ya no cabe en el free tier**.
+- **Resultados de goleadores**: The Odds API da el marcador (`/scores`) pero **no la lista de goleadores**.
+  Para liquidar este mercado necesitamos una **segunda integración de resultados**, p. ej. **API-Football**
+  (endpoint de eventos/goles del partido). Su free tier (~100 req/día) sobra para consultar los goleadores
+  de unos pocos partidos finalizados al día.
+
+> Recomendación de coste: implementar **1X2 en el free tier** primero; activar goleadores cuando decidáis
+> asumir el plan de pago de odds + la segunda fuente de resultados. El `OddsProvider`/`ResultsProvider` con
+> modo *mock* permite desarrollar y probar toda la lógica de goleadores **sin gastar un crédito**.
 
 **Conclusiones / mitigaciones (siguen vigentes):**
 
@@ -70,7 +93,8 @@ Estimación con **un solo torneo**, refresco de cuotas cada **30 min** en ventan
 └──────────────────────────┘                               │  ├────────────────────────┤  │
                                                             │  │ Services (lógica/ACID) │  │
                                                             │  ├────────────────────────┤  │
-                                                            │  │ Scheduled Jobs (3)     │──┼──▶ The Odds API
+                                                            │  │ Scheduled Jobs (3)     │──┼──▶ OddsProvider   → The Odds API (cuotas 1X2 + props)
+                                                            │  │                        │──┼──▶ ResultsProvider→ API-Football (marcador + goleadores)
                                                             │  ├────────────────────────┤  │
                                                             │  │ Repositories (JPA)     │  │
                                                             │  └────────────────────────┘  │
@@ -88,6 +112,8 @@ Estimación con **un solo torneo**, refresco de cuotas cada **30 min** en ventan
 - **Frontend**: HTML5 + Tailwind CSS + JavaScript vanilla (sin framework pesado; el PDF lo pide así).
   PWA con `manifest.json` + Service Worker (estrategia *App Shell*).
 - **Auth**: JWT (access token; ver §7 para refresh).
+- **Datos externos**: `OddsProvider` (The Odds API, cuotas) y `ResultsProvider` (API-Football, marcador y
+  goleadores), ambos detrás de una interfaz con implementación *mock* para desarrollo sin coste.
 - **Build/Dev**: Docker Compose (Postgres + backend) para levantar en local con un comando.
 
 ---
@@ -100,10 +126,14 @@ billetera y soportar tickets combinados (uno-a-muchos).
 ### 4.1. Diagrama de entidades
 
 ```
- usuario 1───* apuesta 1───* seleccion *───1 partido *───1 liga
-    │                                              │
-    └──1───* transaccion                           └── (estado, marcador, cuotas congeladas en seleccion)
+ usuario 1───* apuesta 1───* seleccion *───1 opcion_cuota *───1 mercado *───1 partido *───1 liga
+    │                                                                            │
+    └──1───* transaccion                                          (marcador + goleadores al finalizar)
 ```
+
+> Generalizamos a **mercado → opción**: un `partido` tiene varios `mercado` (1X2, GOLEADOR), y cada mercado
+> tiene varias `opcion_cuota` (las 3 del 1X2, o un jugador por opción en goleador). Una `seleccion` apunta
+> a una `opcion_cuota` y congela su cuota. Así añadir mercados nuevos = añadir filas, no columnas.
 
 ### 4.2. Tablas
 
@@ -139,11 +169,32 @@ billetera y soportar tickets combinados (uno-a-muchos).
 | fase | VARCHAR NULL | `GRUPOS` / `OCTAVOS` / `CUARTOS` / `SEMIS` / `FINAL` (útil para agrupar en la cartelera del Mundial) |
 | estado | VARCHAR | `PROGRAMADO` / `EN_JUEGO` / `FINALIZADO` / `LIQUIDADO` |
 | goles_local | INT NULL | marcador a 90 min (tiempo reglamentario); se rellena al finalizar |
-| goles_visitante | INT NULL | marcador a 90 min (no contar prórroga/penaltis para el 1X2) |
-| cuota_1 | NUMERIC(6,2) | cuota local vigente |
-| cuota_x | NUMERIC(6,2) | cuota empate vigente |
-| cuota_2 | NUMERIC(6,2) | cuota visitante vigente |
-| cuotas_actualizado_en | TIMESTAMPTZ | |
+| goles_visitante | INT NULL | marcador a 90 min (no contar prórroga/penaltis) |
+
+> Las cuotas ya **no** son columnas del partido: viven en `mercado`/`opcion_cuota` (abajo).
+
+**`mercado`** (un mercado abierto para un partido)
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | BIGINT PK | |
+| partido_id | FK → partido | |
+| tipo | VARCHAR | `1X2` / `GOLEADOR` |
+| estado | VARCHAR | `ABIERTO` / `CERRADO` / `LIQUIDADO` |
+
+> UNIQUE (`partido_id`, `tipo`): un mercado de cada tipo por partido.
+
+**`opcion_cuota`** (cada opción apostable dentro de un mercado, con su cuota vigente)
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | BIGINT PK | |
+| mercado_id | FK → mercado | |
+| codigo | VARCHAR | `LOCAL`/`EMPATE`/`VISITANTE` (1X2) o `PLAYER:<external_id>` (goleador) |
+| descripcion | VARCHAR | "Real Madrid" / "Empate" / "Lamine Yamal" (para mostrar) |
+| cuota | NUMERIC(6,2) | cuota vigente (la que muestra la cartelera) |
+| disponible | BOOLEAN | false si el proveedor deja de ofrecerla |
+| actualizado_en | TIMESTAMPTZ | |
+
+> UNIQUE (`mercado_id`, `codigo`): permite *upsert* de cuotas por el job sin duplicar opciones.
 
 **`apuesta`** (el ticket)
 | Columna | Tipo | Notas |
@@ -163,10 +214,27 @@ billetera y soportar tickets combinados (uno-a-muchos).
 |---------|------|-------|
 | id | BIGINT PK | |
 | apuesta_id | FK → apuesta | |
-| partido_id | FK → partido | |
-| pronostico | VARCHAR | `LOCAL` / `EMPATE` / `VISITANTE` |
+| opcion_cuota_id | FK → opcion_cuota | la opción concreta elegida (de ahí se derivan mercado y partido) |
+| descripcion_snapshot | VARCHAR | copia de la descripción al apostar (ej. "Lamine Yamal — Marca") |
 | cuota_congelada | NUMERIC(6,2) | **inmutable** desde la confirmación (§4.3 PDF) |
-| resultado | VARCHAR | `PENDIENTE` / `ACERTADA` / `FALLADA` |
+| resultado | VARCHAR | `PENDIENTE` / `ACERTADA` / `FALLADA` / `ANULADA` |
+
+> `ANULADA` cubre el caso de que la opción/partido se cancele: esa línea pasa a cuota efectiva 1.0 y la
+> combinada se recalcula (ver §10). Guardamos `descripcion_snapshot` porque las cuotas/descripciones del
+> proveedor cambian; el ticket debe enseñar siempre lo que el usuario apostó.
+
+**`partido_goleador`** (quién marcó en los 90 min — alimenta la liquidación del mercado GOLEADOR)
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | BIGINT PK | |
+| partido_id | FK → partido | |
+| player_external_id | VARCHAR | id del jugador en la fuente de resultados (API-Football) |
+| nombre | VARCHAR | nombre del goleador |
+| minuto | INT NULL | informativo |
+| en_propia | BOOLEAN | autogol → **no** cuenta para "marca en cualquier momento" |
+
+> UNIQUE (`partido_id`, `player_external_id`, `minuto`) para idempotencia del job de resultados.
+> Un jugador presente aquí (con `en_propia = false`) hace que la opción `PLAYER:<id>` resulte `ACERTADA`.
 
 **`transaccion`** (auditoría de movimientos de saldo)
 | id | usuario_id FK | apuesta_id FK NULL | tipo (`BONO_INICIAL`/`APUESTA`/`PREMIO`/`BONO_DIARIO`/`RESET`) | importe (+/-) | saldo_resultante | creado_en |
@@ -198,8 +266,9 @@ Prefijo: `/api/v1`. Autenticación JWT salvo donde se indique *(público)*.
 ### 5.2. Cartelera / Partidos
 | Método | Ruta | Descripción | Auth |
 |--------|------|-------------|------|
-| GET | `/matches` | Partidos `PROGRAMADO` con cuotas, filtrable por `?liga=&desde=&hasta=` | sí |
-| GET | `/matches/{id}` | Detalle de un partido | sí |
+| GET | `/matches` | Partidos `PROGRAMADO` con sus mercados/opciones, filtrable por `?liga=&desde=&hasta=` | sí |
+| GET | `/matches/{id}` | Detalle de un partido (incluye mercados `1X2` y `GOLEADOR` con sus opciones) | sí |
+| GET | `/matches/{id}/markets/{tipo}` | Opciones de un mercado concreto (útil para la lista larga de goleadores) | sí |
 | GET | `/leagues` | Ligas activas (para filtros) | sí |
 
 ### 5.3. Apuestas
@@ -209,23 +278,25 @@ Prefijo: `/api/v1`. Autenticación JWT salvo donde se indique *(público)*.
 | GET | `/bets?estado=PENDIENTE\|RESUELTO` | Historial del usuario (pestaña "Mis Apuestas") | sí |
 | GET | `/bets/{id}` | Detalle del ticket con sus selecciones | sí |
 
-**Cuerpo de `POST /bets`:**
+**Cuerpo de `POST /bets`** (cada selección referencia una `opcion_cuota`, sea 1X2 o goleador):
 ```json
 {
-  "importe": 50.00,
+  "importe": 10.00,
   "selecciones": [
-    { "partidoId": 12, "pronostico": "LOCAL" },
-    { "partidoId": 19, "pronostico": "EMPATE" }
+    { "opcionCuotaId": 102 },   // p. ej. "Real Madrid" en el mercado 1X2
+    { "opcionCuotaId": 540 }    // p. ej. "Lamine Yamal — Marca" en el mercado GOLEADOR
   ]
 }
 ```
 **Validaciones del servidor (críticas):**
 1. El usuario tiene `saldo >= importe`.
-2. Todos los partidos están en estado `PROGRAMADO` (no empezados).
-3. Se **re-leen las cuotas actuales de BD** y se congelan en `seleccion.cuota_congelada`
-   (el cliente *no* dicta la cuota; evita manipulación).
-4. `tipo` = `SIMPLE` si 1 selección, `COMBINADA` si ≥2.
-5. Todo dentro de **una transacción** `@Transactional` con bloqueo del saldo.
+2. Cada opción pertenece a un mercado `ABIERTO` de un partido en estado `PROGRAMADO` (no empezado) y está `disponible`.
+3. Se **re-leen las cuotas actuales de BD** (de `opcion_cuota`) y se congelan en `seleccion.cuota_congelada`
+   (el cliente *no* dicta la cuota; evita manipulación). Se guarda `descripcion_snapshot`.
+4. **No** se permiten dos selecciones del **mismo partido** en una combinada (eventos no independientes;
+   regla estándar de casas reales y coherente con la fórmula de cuota acumulada del PDF).
+5. `tipo` = `SIMPLE` si 1 selección, `COMBINADA` si ≥2.
+6. Todo dentro de **una transacción** `@Transactional` con bloqueo del saldo.
 
 ### 5.4. Billetera
 | Método | Ruta | Descripción | Auth |
@@ -251,27 +322,39 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
 
 | Job | Frecuencia PDF | Frecuencia recomendada | Función |
 |-----|----------------|------------------------|---------|
-| Sincronizador de calendario | Diaria 01:00 | **Diaria 01:00** | Trae partidos del Mundial de las próximas 72 h, upsert por `external_id` |
-| Actualizador de cuotas | Cada 15 min | **Cada 30 min**, solo partidos < 24 h y `PROGRAMADO` | Refresca `cuota_1/x/2`; respeta presupuesto (§2) |
-| Motor de liquidación | Cada 5 min | **Cada 5 min** | Busca FT, fija marcador, liquida tickets `PENDIENTE` en transacción |
+| Sincronizador de calendario | Diaria 01:00 | **Diaria 01:00** | Trae partidos del Mundial de las próximas 72 h, upsert por `external_id`; crea los `mercado` (1X2, GOLEADOR) |
+| Actualizador de cuotas | Cada 15 min | **Cada 30 min** (1X2) / **cada 60 min** (goleador), solo partidos < 24 h y `PROGRAMADO` | Upsert de `opcion_cuota` por mercado; respeta presupuesto (§2) |
+| Motor de liquidación | Cada 5 min | **Cada 5 min** | Busca FT, fija marcador **y goleadores**, liquida tickets `PENDIENTE` en transacción |
+
+> El job de cuotas usa el `OddsProvider`. La parte de goleadores llama al endpoint de *player props* por
+> evento (más caro, ver §2) y a menor frecuencia. El job de liquidación usa además el `ResultsProvider`
+> (API-Football) para poblar `partido_goleador`.
 
 **Idempotencia**: todos los jobs deben poder re-ejecutarse sin duplicar datos ni doble-pago
-(upsert por `external_id`; liquidar solo apuestas en estado `PENDIENTE`; marcar partido `LIQUIDADO`).
+(upsert por `external_id` y por claves UNIQUE de `opcion_cuota`/`partido_goleador`; liquidar solo apuestas
+en estado `PENDIENTE`; marcar partido `LIQUIDADO`).
 
 **Algoritmo de liquidación (por partido finalizado):**
 ```
-1. Determinar resultado real: LOCAL / EMPATE / VISITANTE según marcador.
-   IMPORTANTE (Mundial): en eliminatorias el 1X2 se liquida con el marcador
-   de los 90 min (tiempo reglamentario). La X es válida aunque luego un equipo
-   pase por prórroga o penaltis. Usar el marcador FT, no el AET/penaltis.
-2. Por cada seleccion de ese partido en apuestas PENDIENTE:
-     resultado = ACERTADA si pronostico == resultadoReal, si no FALLADA.
+1. Obtener datos reales a 90 min: marcador y lista de goleadores (partido_goleador).
+   IMPORTANTE (Mundial): todo se liquida con lo ocurrido en los 90 min (tiempo
+   reglamentario). La X es válida aunque luego haya prórroga/penaltis, y los goles
+   de la prórroga NO cuentan para el mercado de goleador. Autogol no cuenta al jugador.
+
+2. Resolver cada seleccion de ese partido en apuestas PENDIENTE, según el tipo de su mercado:
+     - Mercado 1X2:      resultadoReal = LOCAL/EMPATE/VISITANTE -> ACERTADA si la opción coincide.
+     - Mercado GOLEADOR: ACERTADA si el player_external_id de la opción está en partido_goleador
+                         (con en_propia = false); si no, FALLADA.
+     (Si la opción/partido fue cancelado -> ANULADA, cuota efectiva 1.0.)
+
 3. Por cada apuesta afectada, recalcular estado:
      - si alguna seleccion FALLADA  -> apuesta PERDIDA.
-     - si TODAS las selecciones (de todos sus partidos) ACERTADAS -> GANADA:
-         acreditar retorno_potencial al saldo + registrar transaccion PREMIO.
+     - si TODAS las selecciones están resueltas y ninguna FALLADA -> GANADA:
+         retorno = importe × ∏(cuota_congelada de las no anuladas; las ANULADA cuentan como 1.0).
+         acreditar retorno al saldo + registrar transaccion PREMIO.
      - si quedan selecciones PENDIENTE (otros partidos sin terminar) -> sigue PENDIENTE.
-4. Marcar partido como LIQUIDADO.
+
+4. Marcar mercados del partido como LIQUIDADO y el partido como LIQUIDADO.
    Todo en una @Transactional.
 ```
 
@@ -293,8 +376,9 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
 ## 8. Frontend PWA
 
 - **3 pestañas** (Bottom Navigation, zonas táctiles ≥ 44×44 px):
-  1. **Cartelera** — tarjetas de partido con 3 botones de cuota (1/X/2), filtros horizontales por liga.
-  2. **Mis Apuestas** — segmentado Pendientes / Resueltos.
+  1. **Cartelera** — tarjetas de partido con los 3 botones de cuota 1/X/2 y un acceso **"Goleadores"**
+     que abre la lista de jugadores con su cuota (mercado GOLEADOR); filtros horizontales por liga.
+  2. **Mis Apuestas** — segmentado Pendientes / Resueltos (cada línea muestra `descripcion_snapshot`).
   3. **Billetera** — saldo, gráfico de evolución, bono diario, reset.
 - **Bet Slip flotante** (Bottom Sheet): se actualiza al pulsar cuotas, permite importe y confirmación
   sin salir de la cartelera. Calcula cuota total y retorno potencial en cliente (visual), pero el
@@ -317,19 +401,27 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
 
 ### Fase 2 — Datos deportivos
 - Interfaz `OddsProvider` + implementación The Odds API + **mock** para desarrollo.
-- Job de calendario + job de cuotas. Endpoints `/matches`, `/leagues`.
+- Modelo `mercado`/`opcion_cuota`. Job de calendario + job de cuotas (mercado 1X2).
+- Endpoints `/matches`, `/leagues`.
 
 ### Fase 3 — Apuestas (núcleo)
 - `POST /bets` con validación, congelación de cuotas y bloqueo de saldo (ACID).
 - Historial `/bets`. Bet Slip en frontend.
 
-### Fase 4 — Liquidación
-- Job de liquidación + algoritmo de settlement + acreditación de premios.
+### Fase 4 — Liquidación 1X2
+- Job de liquidación + algoritmo de settlement (mercado 1X2) + acreditación de premios.
 
 ### Fase 5 — Social y pulido
 - Leaderboard, gráfico de billetera, refinamiento UX móvil, tests de integración.
 
-> Cada fase es desplegable y probable de forma independiente. Recomiendo cerrar Fase 1–4 como MVP jugable.
+### Fase 6 — Mercado de Goleadores (fast-follow v1.1)
+- Cuotas de *player props* en el `OddsProvider` (plan de pago) + opciones `PLAYER:*` en el mercado GOLEADOR.
+- `ResultsProvider` (API-Football) + tabla `partido_goleador` + extensión del settlement a GOLEADOR.
+- UI de lista de goleadores en la cartelera.
+
+> Cada fase es desplegable y probable de forma independiente. Recomiendo cerrar **Fase 1–4 como MVP jugable**
+> (solo 1X2, todo en free tier) y abordar la **Fase 6 (goleadores)** cuando decidáis asumir el coste de
+> API. El modelo de datos ya soporta goleadores desde la Fase 2, así que no hay repintado.
 
 ---
 
@@ -342,12 +434,17 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
 - **Liquidación 1X2 en eliminatorias**: por marcador de **90 min** (la X es válida pese a prórroga/penaltis).
 - **Economía**: saldo inicial **50 monedas**; **bono diario fijo de +10 monedas** reclamable 1 vez cada 24 h
   (sin condición de saldo mínimo).
+- **Mercados**: **1X2** (MVP) + **Goleador "marca en cualquier momento"** (fast-follow v1.1). Modelo de
+  datos generalizado a `mercado`/`opcion_cuota` desde el inicio. Goleador se liquida a 90 min, autogol no cuenta.
 
 ### Pendientes de confirmar
-1. **Empates/anulaciones**: si un partido se cancela/aplaza en el mundo real, ¿se anula la selección y se
+1. **Coste del mercado de goleadores**: requiere **plan de pago** en The Odds API (player props) + una
+   **segunda fuente de resultados** (API-Football) para saber quién marcó. ¿Asumimos ese coste o lo dejamos
+   tras validar el MVP con 1X2? (recomendado: validar primero con 1X2 gratis).
+2. **Empates/anulaciones**: si un partido se cancela/aplaza en el mundo real, ¿se anula la selección y se
    recalcula la combinada con cuota 1.0? (estándar en casas reales). Recomiendo soportarlo.
-2. **¿Hosting?** Para jugar con amigos: backend + Postgres en un VPS pequeño o Railway/Render; PWA en
+3. **¿Hosting?** Para jugar con amigos: backend + Postgres en un VPS pequeño o Railway/Render; PWA en
    el mismo backend o en Netlify/Vercel.
-3. **Bonus opcional Mundial**: ¿quieres un mercado extra típico de torneo (ej. "ganador del grupo" o
+4. **Bonus opcional Mundial**: ¿quieres un mercado extra típico de torneo (ej. "ganador del grupo" o
    "campeón del Mundial") en v2? No es MVP, pero es muy social. Lo dejo anotado.
 ```
