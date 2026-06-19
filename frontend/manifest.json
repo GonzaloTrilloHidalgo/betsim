@@ -1,0 +1,13 @@
+{
+  "name": "BetSim — Mundial 2026",
+  "short_name": "BetSim",
+  "description": "Simulador de apuestas con monedas ficticias para jugar con amigos.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

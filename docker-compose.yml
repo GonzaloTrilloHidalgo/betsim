@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: betsim
+      POSTGRES_USER: betsim
+      POSTGRES_PASSWORD: betsim
+    ports:
+      - "5432:5432"
+    volumes:
+      - betsim_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U betsim"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/betsim
+      DB_USER: betsim
+      DB_PASSWORD: betsim
+      # Proveedor de datos: "mock" (sin coste) o "theoddsapi" (requiere ODDS_API_KEY).
+      BETSIM_PROVIDER: ${BETSIM_PROVIDER:-mock}
+      ODDS_API_KEY: ${ODDS_API_KEY:-}
+      # Cambia el secreto en producción (>= 32 bytes).
+      BETSIM_JWT_SECRET: ${BETSIM_JWT_SECRET:-dev-only-secret-change-me-please-32bytes-min!!}
+      BETSIM_CORS_ORIGINS: ${BETSIM_CORS_ORIGINS:-http://localhost:5500,http://127.0.0.1:5500}
+    ports:
+      - "8080:8080"
+
+  frontend:
+    image: nginx:alpine
+    depends_on:
+      - backend
+    ports:
+      - "5500:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+
+volumes:
+  betsim_db:
