@@ -114,7 +114,7 @@ billetera y soportar tickets combinados (uno-a-muchos).
 | username | VARCHAR(30) UNIQUE NOT NULL | login |
 | email | VARCHAR(120) UNIQUE NOT NULL | |
 | password_hash | VARCHAR(100) NOT NULL | BCrypt |
-| saldo | NUMERIC(14,2) NOT NULL | billetera; nunca < 0 (CHECK) |
+| saldo | NUMERIC(14,2) NOT NULL | billetera; inicial 50; nunca < 0 (CHECK) |
 | rol | VARCHAR(20) NOT NULL | USER / ADMIN |
 | ultimo_bono | DATE | control del bono diario |
 | creado_en | TIMESTAMPTZ NOT NULL | |
@@ -191,7 +191,7 @@ Prefijo: `/api/v1`. Autenticación JWT salvo donde se indique *(público)*.
 ### 5.1. Autenticación
 | Método | Ruta | Descripción | Auth |
 |--------|------|-------------|------|
-| POST | `/auth/register` | Crea usuario + asigna saldo inicial (1.000) | público |
+| POST | `/auth/register` | Crea usuario + asigna saldo inicial (**50 monedas**) | público |
 | POST | `/auth/login` | Devuelve `accessToken` (+ `refreshToken`) | público |
 | POST | `/auth/refresh` | Renueva el access token | refresh token |
 
@@ -232,7 +232,7 @@ Prefijo: `/api/v1`. Autenticación JWT salvo donde se indique *(público)*.
 |--------|------|-------------|------|
 | GET | `/wallet` | Saldo actual + resumen | sí |
 | GET | `/wallet/transactions` | Movimientos (para el gráfico) | sí |
-| POST | `/wallet/daily-bonus` | Reclama bono diario (1×/día) | sí |
+| POST | `/wallet/daily-bonus` | Reclama bono diario (**+10 monedas**, 1×/día) | sí |
 | POST | `/wallet/reset` | Reinicia saldo al valor inicial | sí |
 
 ### 5.5. Social (lo que añade valor para "jugar con amigos")
@@ -313,7 +313,7 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
 
 ### Fase 1 — Auth y billetera
 - Registro/login/refresh con JWT.
-- Saldo inicial, tabla `transaccion`, endpoints `/wallet/*`, bono diario, reset.
+- Saldo inicial (50 monedas), tabla `transaccion`, endpoints `/wallet/*`, bono diario (+10/día), reset.
 
 ### Fase 2 — Datos deportivos
 - Interfaz `OddsProvider` + implementación The Odds API + **mock** para desarrollo.
@@ -340,13 +340,14 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
   barato en API. Tras el torneo se puede ampliar a ligas sin tocar el esquema.
 - **Métrica del leaderboard**: **beneficio neto histórico** (suma de premios − suma de importes apostados).
 - **Liquidación 1X2 en eliminatorias**: por marcador de **90 min** (la X es válida pese a prórroga/penaltis).
+- **Economía**: saldo inicial **50 monedas**; **bono diario fijo de +10 monedas** reclamable 1 vez cada 24 h
+  (sin condición de saldo mínimo).
 
 ### Pendientes de confirmar
-1. **Reglas del bono diario**: ¿cuánto y cada cuánto? Sugerencia: +500 cada 24 h si saldo < 200.
-2. **Empates/anulaciones**: si un partido se cancela/aplaza en el mundo real, ¿se anula la selección y se
+1. **Empates/anulaciones**: si un partido se cancela/aplaza en el mundo real, ¿se anula la selección y se
    recalcula la combinada con cuota 1.0? (estándar en casas reales). Recomiendo soportarlo.
-3. **¿Hosting?** Para jugar con amigos: backend + Postgres en un VPS pequeño o Railway/Render; PWA en
+2. **¿Hosting?** Para jugar con amigos: backend + Postgres en un VPS pequeño o Railway/Render; PWA en
    el mismo backend o en Netlify/Vercel.
-4. **Bonus opcional Mundial**: ¿quieres un mercado extra típico de torneo (ej. "ganador del grupo" o
+3. **Bonus opcional Mundial**: ¿quieres un mercado extra típico de torneo (ej. "ganador del grupo" o
    "campeón del Mundial") en v2? No es MVP, pero es muy social. Lo dejo anotado.
 ```
