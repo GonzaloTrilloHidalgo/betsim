@@ -58,7 +58,9 @@ public class BetService {
         apuesta.setImporte(importe.setScale(2, RoundingMode.HALF_UP));
 
         BigDecimal cuotaTotal = BigDecimal.ONE;
-        Set<Long> partidosVistos = new HashSet<>();
+        // Se permiten varias selecciones del MISMO partido (combinada del mismo partido), pero no dos
+        // del MISMO grupo correlacionado: clave = partidoId + grupo (ver grupo()).
+        Set<String> gruposVistos = new HashSet<>();
         List<Seleccion> sels = new ArrayList<>();
 
         for (Long opcionId : opcionIds) {
@@ -72,8 +74,8 @@ public class BetService {
             if (p.getEstado() != EstadoPartido.PROGRAMADO || !p.getInicioUtc().isAfter(Instant.now())) {
                 throw ApiException.badRequest("El partido ya ha empezado: " + p.getEquipoLocal() + " vs " + p.getEquipoVisitante());
             }
-            if (!partidosVistos.add(p.getId())) {
-                throw ApiException.badRequest("No puedes combinar dos selecciones del mismo partido");
+            if (!gruposVistos.add(p.getId() + ":" + grupo(m.getTipo()))) {
+                throw ApiException.badRequest("No puedes combinar dos apuestas del mismo tipo en el mismo partido");
             }
 
             Seleccion s = new Seleccion();
@@ -98,5 +100,14 @@ public class BetService {
         transacciones.save(new Transaccion(u, guardada, TipoTransaccion.APUESTA,
                 apuesta.getImporte().negate(), u.getSaldo()));
         return guardada;
+    }
+
+    /**
+     * Grupo correlacionado de un mercado: dentro de un mismo partido solo se admite una selección por
+     * grupo. 1X2 y Doble oportunidad comparten grupo (ambos son el resultado del partido).
+     */
+    private static String grupo(Enums.TipoMercado tipo) {
+        return (tipo == Enums.TipoMercado.UNO_X_DOS || tipo == Enums.TipoMercado.DOBLE_OPORTUNIDAD)
+                ? "RESULTADO" : tipo.name();
     }
 }

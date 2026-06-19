@@ -216,11 +216,12 @@ function resultCard(m) {
     </div>`;
 }
 
-// Botón de cuota genérico para cualquier mercado.
-function oddBtn(m, o, top) {
+// Botón de cuota genérico para cualquier mercado. `group` agrupa mercados correlacionados:
+// dentro de un partido solo se admite una selección por grupo (1X2 y Doble oportunidad = "RESULTADO").
+function oddBtn(m, o, top, group) {
   if (!o) return `<div class="flex-1"></div>`;
   return `
-    <button data-opt="${o.id}" data-match="${m.id}" data-cuota="${o.cuota}"
+    <button data-opt="${o.id}" data-match="${m.id}" data-group="${group}" data-cuota="${o.cuota}"
             data-label="${m.equipoLocal} vs ${m.equipoVisitante} · ${o.descripcion}"
             class="flex-1 min-w-0 bg-slate-700 rounded-lg py-1.5 active:bg-slate-600 transition">
       <div class="text-[10px] text-slate-400 truncate px-1">${top}</div>
@@ -244,8 +245,8 @@ function overUnderBlock(m, mou) {
   const rows = lineas.map((ln) => {
     const l = String(ln).replace(/\.0$/, '');
     return `<div class="flex gap-1.5 mb-1.5">
-        ${oddBtn(m, find('OVER_' + l), 'Más de ' + l)}
-        ${oddBtn(m, find('UNDER_' + l), 'Menos de ' + l)}
+        ${oddBtn(m, find('OVER_' + l), 'Más de ' + l, 'OVER_UNDER')}
+        ${oddBtn(m, find('UNDER_' + l), 'Menos de ' + l, 'OVER_UNDER')}
       </div>`;
   }).join('');
   return marketBlock('Goles (Over/Under)', rows);
@@ -257,17 +258,18 @@ function matchCard(m) {
 
   const m1x2 = market('UNO_X_DOS');
   const main = `<div class="flex gap-1.5">
-      ${oddBtn(m, opt(m1x2, 'LOCAL'), '1')}${oddBtn(m, opt(m1x2, 'EMPATE'), 'X')}${oddBtn(m, opt(m1x2, 'VISITANTE'), '2')}
+      ${oddBtn(m, opt(m1x2, 'LOCAL'), '1', 'RESULTADO')}${oddBtn(m, opt(m1x2, 'EMPATE'), 'X', 'RESULTADO')}${oddBtn(m, opt(m1x2, 'VISITANTE'), '2', 'RESULTADO')}
     </div>`;
 
   // Mercados adicionales (si existen).
   const mou = market('OVER_UNDER'), mdc = market('DOBLE_OPORTUNIDAD'), mbtts = market('AMBOS_MARCAN');
   let extra = '';
   if (mou && mou.opciones.length) extra += overUnderBlock(m, mou);
+  // Doble oportunidad comparte grupo "RESULTADO" con el 1X2 (no se combinan entre sí).
   if (mdc) extra += marketBlock('Doble oportunidad', `<div class="flex gap-1.5">
-    ${oddBtn(m, opt(mdc, '1X'), '1X')}${oddBtn(m, opt(mdc, '12'), '12')}${oddBtn(m, opt(mdc, 'X2'), 'X2')}</div>`);
+    ${oddBtn(m, opt(mdc, '1X'), '1X', 'RESULTADO')}${oddBtn(m, opt(mdc, '12'), '12', 'RESULTADO')}${oddBtn(m, opt(mdc, 'X2'), 'X2', 'RESULTADO')}</div>`);
   if (mbtts) extra += marketBlock('Ambos marcan', `<div class="flex gap-1.5">
-    ${oddBtn(m, opt(mbtts, 'BTTS_SI'), 'Sí')}${oddBtn(m, opt(mbtts, 'BTTS_NO'), 'No')}</div>`);
+    ${oddBtn(m, opt(mbtts, 'BTTS_SI'), 'Sí', 'AMBOS_MARCAN')}${oddBtn(m, opt(mbtts, 'BTTS_NO'), 'No', 'AMBOS_MARCAN')}</div>`);
 
   const more = extra ? `
       <button class="more-btn w-full mt-2 text-[11px] text-green-400" data-target="extra-${m.id}">+ Más apuestas</button>
@@ -293,15 +295,16 @@ function matchCard(m) {
 function toggleSelection(btn) {
   const id = Number(btn.dataset.opt);
   const matchId = Number(btn.dataset.match);
+  const group = btn.dataset.group;
   const idx = slip.findIndex((s) => s.opcionCuotaId === id);
   if (idx >= 0) {
     // Ya estaba seleccionada -> quitarla.
     slip.splice(idx, 1);
   } else {
-    // Solo se permite UNA selección por partido (no se pueden combinar mercados del mismo partido).
-    // Al elegir otra opción del mismo partido, sustituye a la anterior (Más/Menos, 1X/12/X2, Sí/No...).
-    slip = slip.filter((s) => s.matchId !== matchId);
-    slip.push({ opcionCuotaId: id, matchId, label: btn.dataset.label, cuota: Number(btn.dataset.cuota) });
+    // Combinada del mismo partido permitida, pero solo UNA por grupo correlacionado: al elegir otra
+    // opción del mismo partido+grupo (Más/Menos, 1X/12/X2, Sí/No, o 1X2 vs Doble oportunidad) la sustituye.
+    slip = slip.filter((s) => !(s.matchId === matchId && s.group === group));
+    slip.push({ opcionCuotaId: id, matchId, group, label: btn.dataset.label, cuota: Number(btn.dataset.cuota) });
   }
   refreshOddButtons();
   renderSlip();
