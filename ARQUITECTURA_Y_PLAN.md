@@ -16,9 +16,10 @@ el caso de uso real es **"jugar con amigos"**. Eso cambia varias prioridades.
 | Tipos de apuesta | Simples (1X2) + Combinadas | **Ambas**, mercado único **1X2** | Es el núcleo del producto |
 | Apuestas en vivo (live) | Ambiguo | **Solo pre-partido** | Live multiplica la complejidad (latencia, settlement parcial) |
 | Mercados | "Mercados" en plural | **Solo 1X2** (1=local, X=empate, 2=visitante) | Un mercado bien hecho > cinco a medias |
-| Ligas | "Ligas internacionales" | **1–2 ligas** configurables | Controlar el coste de la API externa |
+| Competición | "Ligas internacionales" | **Mundial 2026** (un solo torneo, `sport_key = soccer_fifa_world_cup`) | El torneo está en juego ahora (11 jun – 19 jul 2026); acotado y barato en API |
 | API externa | API-Football *o* The Odds API | **The Odds API** (una sola) | Las cuotas son el centro; su free tier es más generoso para odds |
-| Leaderboard entre amigos | No aparece | **Sí, incluido en MVP** | Es *la* función social que hace divertido jugar con amigos |
+| Liquidación 1X2 en eliminatorias | No contemplado | **Resultado de los 90 min** (la X sigue válida aunque haya prórroga/penaltis) | Es el estándar de las casas reales para el mercado 1X2 |
+| Leaderboard entre amigos | No aparece | **Sí, incluido en MVP**, métrica = **beneficio neto histórico** | Es *la* función social que hace divertido jugar con amigos; premia acierto sostenido, no suerte |
 | Recarga / reclamo diario | Mencionado sin reglas | **Bono diario fijo + reset manual** | Reglas simples y claras |
 
 **Out of scope del MVP** (candidatos a v2): apuestas en vivo, mercados adicionales (over/under, hándicap,
@@ -31,23 +32,28 @@ ambos marcan), cash-out, notificaciones push, chat entre amigos, multi-divisa.
 Este es el factor que más condiciona la viabilidad y el PDF lo subestima. Lo dimensionamos explícitamente.
 
 **The Odds API** (plan gratuito ≈ 500 créditos/mes; 1 crédito ≈ 1 región × 1 mercado por petición de odds).
+Competición única: **Mundial 2026** → `sport_key = soccer_fifa_world_cup` (1 sola clave deportiva).
 
-Estimación con **2 ligas**, refresco de cuotas cada **15 min** solo en ventana activa:
+Estimación con **un solo torneo**, refresco de cuotas cada **30 min** en ventana activa:
 
-- Listado de eventos + odds de una liga (1 región, 1 mercado) ≈ **1 crédito/llamada**.
-- Si refrescamos solo en una ventana de ~12 h/día (no de madrugada): `12 h × 4 refrescos/h × 2 ligas ≈ 96 créditos/día`.
-- Eso son **~2.880 créditos/mes** → **excede el free tier**.
+- Listado de eventos + odds del torneo (1 región, 1 mercado 1X2) ≈ **1 crédito/llamada**.
+- Ventana realista de partidos ~10 h/día: `10 h × 2 refrescos/h ≈ 20 créditos/día`.
+- A lo largo del torneo (~38 días): `20 × 38 ≈ 760 créditos`.
+- Está **muy cerca/dentro** del free tier mensual y, si se afina (refrescar solo cuando hay partidos en
+  las próximas 24 h), baja a la mitad. **El Mundial cabe holgadamente** frente a las 2 ligas año-redondo.
 
-**Conclusiones / mitigaciones:**
+> Ventaja clave del Mundial: es un evento **acotado en el tiempo**. No hay coste recurrente indefinido; el
+> grupo juega durante las ~5 semanas del torneo y listo.
 
-1. El refresco "cada 15 min sobre todos los partidos" del PDF **no entra en el plan gratuito**. Opciones:
-   - Refrescar cuotas **cada 30–60 min** y solo de partidos que empiezan en las próximas 24–48 h.
-   - Cachear agresivamente; no llamar si no hay partidos en ventana.
-   - Plan de pago (~20.000 créditos/mes) si el grupo de amigos crece.
+**Conclusiones / mitigaciones (siguen vigentes):**
+
+1. Refrescar cuotas **cada 30 min** y solo de partidos que empiezan en las próximas 24 h.
 2. **Diseñar una capa de abstracción `OddsProvider`** (interfaz) para poder cambiar de proveedor o mockear
    datos sin tocar la lógica de negocio. Imprescindible para tests y para desarrollar sin gastar créditos.
 3. Guardar siempre la **última respuesta** en BD (no depender de la API en cada request de usuario; el
    usuario lee de *nuestra* BD, no de la API externa).
+4. **Plan B sin coste**: el modo *mock* del `OddsProvider` permite desarrollar y jugar con datos simulados
+   del Mundial si se agotan los créditos.
 
 > Regla de oro: **el usuario nunca pega contra la API externa**. Solo nuestros jobs `@Scheduled` lo hacen.
 
@@ -115,8 +121,11 @@ billetera y soportar tickets combinados (uno-a-muchos).
 
 > `saldo` con `CHECK (saldo >= 0)` a nivel de BD: defensa final contra el descubierto.
 
-**`liga`**
-| id | nombre | sport_key (clave externa de The Odds API) | pais | activa (bool) |
+**`liga`** *(competición — para el MVP contiene una sola fila: el Mundial 2026)*
+| id | nombre | sport_key (clave externa de The Odds API, ej. `soccer_fifa_world_cup`) | pais | activa (bool) |
+
+> Mantenemos el nombre genérico `liga`/competición para no atarnos: si tras el Mundial queréis seguir
+> jugando con LaLiga o Champions, basta con añadir filas, sin cambiar el esquema.
 
 **`partido`**
 | Columna | Tipo | Notas |
@@ -127,9 +136,10 @@ billetera y soportar tickets combinados (uno-a-muchos).
 | equipo_local | VARCHAR | |
 | equipo_visitante | VARCHAR | |
 | inicio_utc | TIMESTAMPTZ | |
+| fase | VARCHAR NULL | `GRUPOS` / `OCTAVOS` / `CUARTOS` / `SEMIS` / `FINAL` (útil para agrupar en la cartelera del Mundial) |
 | estado | VARCHAR | `PROGRAMADO` / `EN_JUEGO` / `FINALIZADO` / `LIQUIDADO` |
-| goles_local | INT NULL | se rellena al finalizar |
-| goles_visitante | INT NULL | |
+| goles_local | INT NULL | marcador a 90 min (tiempo reglamentario); se rellena al finalizar |
+| goles_visitante | INT NULL | marcador a 90 min (no contar prórroga/penaltis para el 1X2) |
 | cuota_1 | NUMERIC(6,2) | cuota local vigente |
 | cuota_x | NUMERIC(6,2) | cuota empate vigente |
 | cuota_2 | NUMERIC(6,2) | cuota visitante vigente |
@@ -241,8 +251,8 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
 
 | Job | Frecuencia PDF | Frecuencia recomendada | Función |
 |-----|----------------|------------------------|---------|
-| Sincronizador de calendario | Diaria 01:00 | **Diaria 01:00** | Trae partidos de próximas 72 h, upsert por `external_id` |
-| Actualizador de cuotas | Cada 15 min | **Cada 30–60 min**, solo partidos < 48 h y `PROGRAMADO` | Refresca `cuota_1/x/2`; respeta presupuesto |
+| Sincronizador de calendario | Diaria 01:00 | **Diaria 01:00** | Trae partidos del Mundial de las próximas 72 h, upsert por `external_id` |
+| Actualizador de cuotas | Cada 15 min | **Cada 30 min**, solo partidos < 24 h y `PROGRAMADO` | Refresca `cuota_1/x/2`; respeta presupuesto (§2) |
 | Motor de liquidación | Cada 5 min | **Cada 5 min** | Busca FT, fija marcador, liquida tickets `PENDIENTE` en transacción |
 
 **Idempotencia**: todos los jobs deben poder re-ejecutarse sin duplicar datos ni doble-pago
@@ -251,6 +261,9 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
 **Algoritmo de liquidación (por partido finalizado):**
 ```
 1. Determinar resultado real: LOCAL / EMPATE / VISITANTE según marcador.
+   IMPORTANTE (Mundial): en eliminatorias el 1X2 se liquida con el marcador
+   de los 90 min (tiempo reglamentario). La X es válida aunque luego un equipo
+   pase por prórroga o penaltis. Usar el marcador FT, no el AET/penaltis.
 2. Por cada seleccion de ese partido en apuestas PENDIENTE:
      resultado = ACERTADA si pronostico == resultadoReal, si no FALLADA.
 3. Por cada apuesta afectada, recalcular estado:
@@ -320,13 +333,20 @@ Conforme al PDF, pero ajustadas al presupuesto de API (§2).
 
 ---
 
-## 10. Cabos sueltos / decisiones pendientes de confirmar
+## 10. Decisiones tomadas y cabos sueltos
 
-1. **¿1 o 2 ligas para empezar?** (impacta coste API). Sugerencia: 1 (LaLiga o Premier).
-2. **Reglas del bono diario**: ¿cuánto y cada cuánto? Sugerencia: +500 cada 24 h si saldo < 200.
-3. **Empates/anulaciones**: si un partido se cancela en el mundo real, ¿se anula la selección y se
+### Decididas ✅
+- **Competición**: **Mundial 2026** (un solo torneo, `soccer_fifa_world_cup`). Acotado en el tiempo y
+  barato en API. Tras el torneo se puede ampliar a ligas sin tocar el esquema.
+- **Métrica del leaderboard**: **beneficio neto histórico** (suma de premios − suma de importes apostados).
+- **Liquidación 1X2 en eliminatorias**: por marcador de **90 min** (la X es válida pese a prórroga/penaltis).
+
+### Pendientes de confirmar
+1. **Reglas del bono diario**: ¿cuánto y cada cuánto? Sugerencia: +500 cada 24 h si saldo < 200.
+2. **Empates/anulaciones**: si un partido se cancela/aplaza en el mundo real, ¿se anula la selección y se
    recalcula la combinada con cuota 1.0? (estándar en casas reales). Recomiendo soportarlo.
-4. **¿Hosting?** Para jugar con amigos: backend + Postgres en un VPS pequeño o Railway/Render; PWA en
+3. **¿Hosting?** Para jugar con amigos: backend + Postgres en un VPS pequeño o Railway/Render; PWA en
    el mismo backend o en Netlify/Vercel.
-5. **Métrica del leaderboard**: ¿saldo actual o beneficio neto histórico? Sugerencia: beneficio neto.
+4. **Bonus opcional Mundial**: ¿quieres un mercado extra típico de torneo (ej. "ganador del grupo" o
+   "campeón del Mundial") en v2? No es MVP, pero es muy social. Lo dejo anotado.
 ```
