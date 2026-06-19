@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @RestController
@@ -23,13 +25,20 @@ public class WalletController {
         this.transacciones = transacciones;
     }
 
-    public record WalletView(BigDecimal saldo, String username) {}
+    public record WalletView(BigDecimal saldo, String username, boolean bonoDisponible, Instant proximoBono) {}
     public record TxView(Long id, String tipo, BigDecimal importe, BigDecimal saldoResultante, Instant fecha) {}
 
     @GetMapping
     public WalletView get(@AuthenticationPrincipal AuthPrincipal me) {
-        Usuario u = wallet.require(me.userId());
-        return new WalletView(u.getSaldo(), u.getUsername());
+        return walletView(wallet.require(me.userId()));
+    }
+
+    /** Construye la vista de billetera incluyendo si el bono está disponible y cuándo toca el siguiente. */
+    private WalletView walletView(Usuario u) {
+        LocalDate hoy = LocalDate.now(ZoneOffset.UTC);
+        boolean disponible = u.getUltimoBono() == null || !u.getUltimoBono().equals(hoy);
+        Instant proximo = disponible ? null : hoy.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        return new WalletView(u.getSaldo(), u.getUsername(), disponible, proximo);
     }
 
     @GetMapping("/transactions")
@@ -40,14 +49,12 @@ public class WalletController {
 
     @PostMapping("/daily-bonus")
     public WalletView dailyBonus(@AuthenticationPrincipal AuthPrincipal me) {
-        Usuario u = wallet.claimDailyBonus(me.userId());
-        return new WalletView(u.getSaldo(), u.getUsername());
+        return walletView(wallet.claimDailyBonus(me.userId()));
     }
 
     @PostMapping("/reset")
     public WalletView reset(@AuthenticationPrincipal AuthPrincipal me) {
-        Usuario u = wallet.reset(me.userId());
-        return new WalletView(u.getSaldo(), u.getUsername());
+        return walletView(wallet.reset(me.userId()));
     }
 
     private TxView toView(Transaccion t) {

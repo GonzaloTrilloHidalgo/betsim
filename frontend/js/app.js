@@ -524,13 +524,43 @@ function betCard(b) {
 }
 
 /* ---------------- Billetera ---------------- */
+let walletFlash = null;   // mensaje a mostrar tras re-renderizar (bono/reset)
+let bonusTimer = null;    // intervalo de la cuenta atrás del bono
+
+function clearBonusTimer() { if (bonusTimer) { clearInterval(bonusTimer); bonusTimer = null; } }
+
+function startBonusCountdown(iso) {
+  clearBonusTimer();
+  const tick = () => {
+    const el = document.getElementById('bonus-countdown');
+    if (!el) { clearBonusTimer(); return; }           // hemos cambiado de pantalla
+    const ms = new Date(iso) - new Date();
+    if (ms <= 0) { clearBonusTimer(); renderBilletera(); return; }  // ya disponible -> recargar
+    const s = Math.floor(ms / 1000);
+    const h = String(Math.floor(s / 3600)).padStart(2, '0');
+    const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    el.textContent = `${h}:${m}:${ss}`;
+  };
+  tick();
+  bonusTimer = setInterval(tick, 1000);
+}
+
 async function renderBilletera() {
+  clearBonusTimer();
   const c = $('#content');
   c.innerHTML = `<div class="text-center text-slate-500 py-10">Cargando…</div>`;
   try {
     const [wallet, txs, board] = await Promise.all([
       api('/wallet'), api('/wallet/transactions'), api('/leaderboard'),
     ]);
+    updateBalance(wallet.saldo);
+
+    const bonoBtn = wallet.bonoDisponible
+      ? `<button id="btn-bonus" class="py-3 rounded-xl bg-green-700 font-semibold active:bg-green-800">🎁 Bono diario (+10)</button>`
+      : `<button id="btn-bonus" disabled class="py-3 rounded-xl bg-slate-800/60 text-slate-400 font-semibold cursor-not-allowed leading-tight">
+           <div>⏳ Próximo bono</div><div id="bonus-countdown" class="text-xs tabular-nums">--:--:--</div></button>`;
+
     c.innerHTML = `
      <div class="mx-auto w-full max-w-2xl">
       <div class="bg-gradient-to-br from-green-700 to-green-600 rounded-2xl p-5 mb-4">
@@ -539,7 +569,7 @@ async function renderBilletera() {
         <div class="text-green-100 text-xs mt-1">@${wallet.username}</div>
       </div>
       <div class="grid grid-cols-2 gap-3 mb-5">
-        <button id="btn-bonus" class="py-3 rounded-xl bg-slate-800 font-semibold active:bg-slate-700">🎁 Bono diario (+10)</button>
+        ${bonoBtn}
         <button id="btn-reset" class="py-3 rounded-xl bg-slate-800 font-semibold active:bg-slate-700">♻️ Reiniciar saldo</button>
       </div>
       <p id="wallet-msg" class="text-center text-sm min-h-[1.25rem] mb-3"></p>
@@ -564,12 +594,22 @@ async function renderBilletera() {
       <button id="btn-logout" class="w-full py-3 rounded-xl bg-slate-800 text-red-400 font-semibold">Cerrar sesión</button>
      </div>`;
 
-    $('#btn-bonus').onclick = async () => {
-      try { const w = await api('/wallet/daily-bonus', { method: 'POST' }); flashWallet('¡Bono reclamado! +10', true); updateBalance(w.saldo); }
-      catch (e) { flashWallet(e.message, false); }
-    };
+    if (walletFlash) { flashWallet(walletFlash.msg, walletFlash.ok); walletFlash = null; }
+
+    if (wallet.bonoDisponible) {
+      $('#btn-bonus').onclick = async () => {
+        try { await api('/wallet/daily-bonus', { method: 'POST' }); walletFlash = { msg: '¡Bono reclamado! +10 monedas', ok: true }; }
+        catch (e) { walletFlash = { msg: e.message, ok: false }; }
+        renderBilletera();
+      };
+    } else if (wallet.proximoBono) {
+      startBonusCountdown(wallet.proximoBono);
+    }
+
     $('#btn-reset').onclick = async () => {
-      const w = await api('/wallet/reset', { method: 'POST' }); flashWallet('Saldo reiniciado', true); updateBalance(w.saldo); renderBilletera();
+      try { await api('/wallet/reset', { method: 'POST' }); walletFlash = { msg: 'Saldo reiniciado', ok: true }; }
+      catch (e) { walletFlash = { msg: e.message, ok: false }; }
+      renderBilletera();
     };
     $('#btn-logout').onclick = logout;
   } catch (e) {
