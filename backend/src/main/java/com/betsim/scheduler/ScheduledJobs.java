@@ -29,15 +29,15 @@ public class ScheduledJobs {
         ingest.sync();
     }
 
-    /** Actualizador de cuotas: cada 30 min. */
-    @Scheduled(fixedDelayString = "PT30M", initialDelayString = "PT30M")
+    /** Actualizador de cuotas: intervalo configurable (betsim.jobs.odds-interval). */
+    @Scheduled(fixedDelayString = "${betsim.jobs.odds-interval}", initialDelayString = "${betsim.jobs.odds-interval}")
     public void cuotas() {
         log.info("[job] Actualizando cuotas...");
         ingest.sync();
     }
 
-    /** Motor de liquidación: cada 5 min. */
-    @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT1M")
+    /** Motor de liquidación: intervalo configurable (betsim.jobs.settlement-interval). */
+    @Scheduled(fixedDelayString = "${betsim.jobs.settlement-interval}", initialDelayString = "PT1M")
     public void liquidacion() {
         log.debug("[job] Motor de liquidación...");
         settlement.run();

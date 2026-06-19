@@ -33,8 +33,14 @@ betsim:
   # Proveedor de datos deportivos: "mock" (sin coste, datos simulados) | "theoddsapi"
   provider:
     type: ${BETSIM_PROVIDER:mock}
-    sport-key: soccer_fifa_world_cup
+    sport-key: ${BETSIM_SPORT_KEY:soccer_fifa_world_cup}
     odds-api-key: ${ODDS_API_KEY:}
+    region: ${BETSIM_ODDS_REGION:eu}
+    results-cache: ${BETSIM_RESULTS_CACHE:PT15M}
+  # Frecuencia de las tareas programadas (formato ISO-8601, p. ej. PT30M = 30 min).
+  jobs:
+    odds-interval: ${BETSIM_ODDS_INTERVAL:PT30M}
+    settlement-interval: ${BETSIM_SETTLEMENT_INTERVAL:PT5M}
   cors:
     allowed-origins: ${BETSIM_CORS_ORIGINS:http://localhost:5500,http://127.0.0.1:5500,http://localhost:8080}
 
