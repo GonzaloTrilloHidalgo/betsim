@@ -1,7 +1,7 @@
 // Service Worker de BetSim — estrategia App Shell.
 // Sube el número de versión al cambiar el frontend para invalidar la caché anterior.
 
-const CACHE = 'betsim-shell-v7';
+const CACHE = 'betsim-shell-v8';
 const SHELL = [
   './',
   './index.html',

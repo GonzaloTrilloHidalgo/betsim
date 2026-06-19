@@ -17,6 +17,27 @@
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .sheet-enter { transform: translateY(100%); }
     .sheet-open { transform: translateY(0); }
+
+    /* ===== Cuadro eliminatorio (bracket con líneas) ===== */
+    .bkt { display: flex; min-width: max-content; }
+    .bkt-round { display: flex; flex-direction: column; width: 168px; }
+    .bkt-title {
+      text-align: center; font-weight: 700; color: #34d399; font-size: .72rem;
+      letter-spacing: .02em; padding-bottom: .5rem;
+    }
+    .bkt-list { display: flex; flex-direction: column; flex: 1; }
+    .bkt-cell { flex: 1; display: flex; align-items: center; position: relative; padding: 4px 12px; }
+    .bkt-card { width: 100%; }
+    /* línea horizontal saliente (hacia la ronda siguiente) */
+    .bkt-round:not(:last-child) .bkt-cell::after {
+      content: ''; position: absolute; right: 0; top: 50%; width: 12px; height: 2px; background: #475569;
+    }
+    /* línea horizontal entrante (desde la ronda anterior) */
+    .bkt-round:not(:first-child) .bkt-cell::before {
+      content: ''; position: absolute; left: 0; top: 50%; width: 12px; height: 2px; background: #475569;
+    }
+    /* línea vertical que une cada pareja de partidos */
+    .bkt-bus { position: absolute; right: 0; top: 50%; width: 2px; height: 100%; background: #475569; }
   </style>
 </head>
 <body class="bg-slate-900 text-slate-100 select-none">

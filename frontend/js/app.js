@@ -234,26 +234,45 @@ function resultCard(m) {
 }
 
 /* ---------------- Cuadro eliminatorio ---------------- */
+// Rondas del cuadro de izquierda a derecha (slots = 16,8,4,2,1).
+const BRACKET_ROUNDS = ['LAST_32', 'LAST_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'];
+
 async function renderCuadro() {
   const c = $('#content');
   c.innerHTML = `<div class="text-center text-slate-500 py-10">Cargando cuadro…</div>`;
   try {
     const stages = await api('/bracket');
-    const conPartidos = stages.some((s) => s.partidos && s.partidos.length);
-    const columnas = stages.map((s) => `
-      <div class="shrink-0 w-60">
-        <div class="text-center text-sm font-bold text-green-400 mb-2">${FASE_LABEL[s.fase] || s.fase}</div>
-        <div class="space-y-2">
-          ${(s.partidos && s.partidos.length)
-            ? s.partidos.map(bracketCard).join('')
-            : `<div class="bg-slate-800/50 border border-dashed border-slate-700 rounded-xl h-16"></div>`.repeat(2)}
-        </div>
-      </div>`).join('');
+    const map = {};
+    stages.forEach((s) => { map[s.fase] = s.partidos || []; });
+    const anyData = stages.some((s) => s.partidos && s.partidos.length);
+    const n = BRACKET_ROUNDS.length;
+
+    const cols = BRACKET_ROUNDS.map((stage, i) => {
+      const slots = Math.pow(2, n - 1 - i);
+      const ms = map[stage] || [];
+      let cells = '';
+      for (let j = 0; j < slots; j++) {
+        const bus = (i < n - 1 && j % 2 === 0) ? '<span class="bkt-bus"></span>' : '';
+        cells += `<div class="bkt-cell">${bracketCard(ms[j])}${bus}</div>`;
+      }
+      return `<div class="bkt-round"><div class="bkt-title">${FASE_LABEL[stage] || stage}</div>
+                <div class="bkt-list">${cells}</div></div>`;
+    }).join('');
+
+    const minH = Math.pow(2, n - 1) * 56;
+    const third = (map['THIRD_PLACE'] || [])[0];
+    const thirdHtml = third ? `
+      <div class="mt-5 max-w-xs">
+        <div class="bkt-title text-left">${FASE_LABEL['THIRD_PLACE']}</div>
+        ${bracketCard(third)}
+      </div>` : '';
+
     c.innerHTML = `
-      <div class="mx-auto w-full max-w-6xl">
-        <h2 class="text-lg font-bold mb-1">Cuadro del Mundial</h2>
-        ${conPartidos ? '' : `<p class="text-slate-500 text-sm mb-3">El cuadro se irá rellenando cuando empiece la fase eliminatoria.</p>`}
-        <div class="flex gap-4 overflow-x-auto no-scrollbar pb-4">${columnas}</div>
+      <div class="w-full">
+        <h2 class="text-lg font-bold mb-1">🏆 Cuadro del Mundial</h2>
+        ${anyData ? '' : `<p class="text-slate-500 text-sm mb-3">El cuadro se rellenará automáticamente cuando empiece la fase eliminatoria.</p>`}
+        <div class="overflow-x-auto pb-4"><div class="bkt" style="min-height:${minH}px">${cols}</div></div>
+        ${thirdHtml}
       </div>`;
   } catch (e) {
     c.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
@@ -261,15 +280,18 @@ async function renderCuadro() {
 }
 
 function bracketCard(m) {
+  if (!m) {
+    return `<div class="bkt-card bg-slate-800/40 border border-dashed border-slate-700 rounded-lg h-12"></div>`;
+  }
   const gl = m.golesLocal, gv = m.golesVisitante;
   const jugado = gl != null && gv != null;
   const row = (nombre, escudoUrl, goles, gana) => `
     <div class="flex items-center justify-between gap-1 ${gana ? 'text-green-400 font-semibold' : 'text-slate-200'}">
-      <span class="flex items-center gap-1 min-w-0">${escudo(escudoUrl, nombre)}<span class="truncate text-xs">${nombre || 'Por definir'}</span></span>
-      <span class="text-xs tabular-nums">${goles ?? ''}</span>
+      <span class="flex items-center gap-1 min-w-0">${escudo(escudoUrl, nombre)}<span class="truncate text-[11px]">${nombre || 'Por definir'}</span></span>
+      <span class="text-[11px] tabular-nums">${goles ?? ''}</span>
     </div>`;
   return `
-    <div class="bg-slate-800 rounded-xl p-2 space-y-1">
+    <div class="bkt-card bg-slate-800 rounded-lg p-1.5 space-y-0.5">
       ${row(m.local, m.escudoLocal, gl, jugado && m.ganador === 'HOME_TEAM')}
       ${row(m.visitante, m.escudoVisitante, gv, jugado && m.ganador === 'AWAY_TEAM')}
     </div>`;
