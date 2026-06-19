@@ -47,6 +47,7 @@ services:
       - "5500:80"
     volumes:
       - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   betsim_db:
