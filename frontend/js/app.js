@@ -149,7 +149,24 @@ function selectTab(tab) {
 async function render() {
   if (currentTab === 'cartelera') return renderCartelera();
   if (currentTab === 'apuestas') return renderApuestas();
+  if (currentTab === 'cuadro') return renderCuadro();
   if (currentTab === 'billetera') return renderBilletera();
+}
+
+/* ---------------- Etiquetas de fase / escudos ---------------- */
+const FASE_LABEL = {
+  GROUP_STAGE: 'Fase de grupos', LAST_32: 'Dieciseisavos', LAST_16: 'Octavos',
+  QUARTER_FINALS: 'Cuartos', SEMI_FINALS: 'Semifinal', THIRD_PLACE: '3.er puesto', FINAL: 'Final',
+};
+function faseLabel(stage, group) {
+  const s = FASE_LABEL[stage] || stage || '';
+  if (group) return (s ? s + ' · ' : '') + group.replace('GROUP_', 'Grupo ');
+  return s;
+}
+// Escudo de football-data o, si no hay, nuestra bandera por nombre.
+function escudo(url, nombre) {
+  if (url) return `<img src="${url}" alt="" loading="lazy" class="inline-block w-5 h-5 object-contain shrink-0 align-middle" />`;
+  return flag(nombre);
 }
 
 /* ---------------- Cartelera ---------------- */
@@ -191,7 +208,7 @@ async function renderProximos(body) {
 
 async function renderResultados(body) {
   try {
-    const results = await api('/matches/results');
+    const results = await api('/results');
     if (!results.length) { body.innerHTML = `<div class="text-center text-slate-500 py-10">Aún no hay partidos jugados.</div>`; return; }
     body.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${results.map(resultCard).join('')}</div>`;
   } catch (e) {
@@ -205,14 +222,56 @@ function resultCard(m) {
   return `
     <div class="bg-slate-800 rounded-xl p-3">
       <div class="flex justify-between items-center mb-2">
-        <div class="text-[10px] text-slate-400">${m.fase || ''}</div>
-        <div class="text-[10px] text-slate-400">${fmtDate(m.inicioUtc)} · Final</div>
+        <div class="text-[10px] text-slate-400 truncate">${faseLabel(m.fase, m.grupo)}</div>
+        <div class="text-[10px] text-slate-400">${m.fecha ? fmtDate(m.fecha) : ''}</div>
       </div>
       <div class="flex items-center justify-between text-sm font-semibold gap-2">
-        <span class="flex items-center gap-1 flex-1 min-w-0 ${win(gl, gv)}">${flag(m.equipoLocal)}<span class="truncate">${m.equipoLocal}</span></span>
+        <span class="flex items-center gap-1 flex-1 min-w-0 ${win(gl, gv)}">${escudo(m.escudoLocal, m.local)}<span class="truncate">${m.local}</span></span>
         <span class="px-2 py-1 rounded-lg bg-slate-700 font-bold tabular-nums">${gl ?? '-'} : ${gv ?? '-'}</span>
-        <span class="flex items-center gap-1 flex-1 min-w-0 justify-end ${win(gv, gl)}"><span class="truncate">${m.equipoVisitante}</span>${flag(m.equipoVisitante)}</span>
+        <span class="flex items-center gap-1 flex-1 min-w-0 justify-end ${win(gv, gl)}"><span class="truncate">${m.visitante}</span>${escudo(m.escudoVisitante, m.visitante)}</span>
       </div>
+    </div>`;
+}
+
+/* ---------------- Cuadro eliminatorio ---------------- */
+async function renderCuadro() {
+  const c = $('#content');
+  c.innerHTML = `<div class="text-center text-slate-500 py-10">Cargando cuadro…</div>`;
+  try {
+    const stages = await api('/bracket');
+    const conPartidos = stages.some((s) => s.partidos && s.partidos.length);
+    const columnas = stages.map((s) => `
+      <div class="shrink-0 w-60">
+        <div class="text-center text-sm font-bold text-green-400 mb-2">${FASE_LABEL[s.fase] || s.fase}</div>
+        <div class="space-y-2">
+          ${(s.partidos && s.partidos.length)
+            ? s.partidos.map(bracketCard).join('')
+            : `<div class="bg-slate-800/50 border border-dashed border-slate-700 rounded-xl h-16"></div>`.repeat(2)}
+        </div>
+      </div>`).join('');
+    c.innerHTML = `
+      <div class="mx-auto w-full max-w-6xl">
+        <h2 class="text-lg font-bold mb-1">Cuadro del Mundial</h2>
+        ${conPartidos ? '' : `<p class="text-slate-500 text-sm mb-3">El cuadro se irá rellenando cuando empiece la fase eliminatoria.</p>`}
+        <div class="flex gap-4 overflow-x-auto no-scrollbar pb-4">${columnas}</div>
+      </div>`;
+  } catch (e) {
+    c.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
+  }
+}
+
+function bracketCard(m) {
+  const gl = m.golesLocal, gv = m.golesVisitante;
+  const jugado = gl != null && gv != null;
+  const row = (nombre, escudoUrl, goles, gana) => `
+    <div class="flex items-center justify-between gap-1 ${gana ? 'text-green-400 font-semibold' : 'text-slate-200'}">
+      <span class="flex items-center gap-1 min-w-0">${escudo(escudoUrl, nombre)}<span class="truncate text-xs">${nombre || 'Por definir'}</span></span>
+      <span class="text-xs tabular-nums">${goles ?? ''}</span>
+    </div>`;
+  return `
+    <div class="bg-slate-800 rounded-xl p-2 space-y-1">
+      ${row(m.local, m.escudoLocal, gl, jugado && m.ganador === 'HOME_TEAM')}
+      ${row(m.visitante, m.escudoVisitante, gv, jugado && m.ganador === 'AWAY_TEAM')}
     </div>`;
 }
 

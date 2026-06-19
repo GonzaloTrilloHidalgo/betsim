@@ -28,6 +28,8 @@ services:
       BETSIM_PROVIDER: ${BETSIM_PROVIDER:-mock}
       ODDS_API_KEY: ${ODDS_API_KEY:-}
       BETSIM_SPORT_KEY: ${BETSIM_SPORT_KEY:-soccer_fifa_world_cup}
+      # Resultados completos y cuadro del Mundial (football-data.org).
+      FOOTBALL_DATA_API_KEY: ${FOOTBALL_DATA_API_KEY:-}
       # Frecuencias conservadoras para cuidar el free tier (sube los minutos si te quedas sin créditos).
       BETSIM_ODDS_INTERVAL: ${BETSIM_ODDS_INTERVAL:-PT30M}
       BETSIM_SETTLEMENT_INTERVAL: ${BETSIM_SETTLEMENT_INTERVAL:-PT10M}

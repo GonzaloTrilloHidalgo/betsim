@@ -17,6 +17,9 @@ services:
       # Tu API key de the-odds-api.com. Secreta: se introduce en el panel de Render, no en el repo.
       - key: ODDS_API_KEY
         sync: false
+      # API key de football-data.org (resultados completos + cuadro del Mundial). Secreta.
+      - key: FOOTBALL_DATA_API_KEY
+        sync: false
       # Secreto JWT generado automáticamente por Render (no hay que tocarlo).
       - key: BETSIM_JWT_SECRET
         generateValue: true
