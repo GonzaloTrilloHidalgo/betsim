@@ -147,6 +147,7 @@ function selectTab(tab) {
 }
 
 async function render() {
+  clearLiveTimer();
   if (currentTab === 'cartelera') return renderCartelera();
   if (currentTab === 'apuestas') return renderApuestas();
   if (currentTab === 'cuadro') return renderCuadro();
@@ -172,19 +173,63 @@ function escudo(url, nombre) {
 /* ---------------- Cartelera ---------------- */
 let carteleraView = 'proximos';
 async function renderCartelera() {
+  clearLiveTimer();
   const c = $('#content');
-  const prox = carteleraView === 'proximos';
+  const seg = (id, label, view) =>
+    `<button id="${id}" class="flex-1 py-2 rounded-lg text-sm font-semibold ${carteleraView === view ? 'bg-green-600' : 'text-slate-300'}">${label}</button>`;
   c.innerHTML = `
     <div class="mx-auto w-full max-w-5xl">
-      <div class="flex bg-slate-800 rounded-xl p-1 mb-4 max-w-md">
-        <button id="cv-prox" class="flex-1 py-2 rounded-lg text-sm font-semibold ${prox ? 'bg-green-600' : 'text-slate-300'}">Próximos</button>
-        <button id="cv-res" class="flex-1 py-2 rounded-lg text-sm font-semibold ${!prox ? 'bg-green-600' : 'text-slate-300'}">Resultados</button>
+      <div class="flex bg-slate-800 rounded-xl p-1 mb-4 max-w-lg">
+        ${seg('cv-prox', 'Próximos', 'proximos')}
+        ${seg('cv-live', '🔴 En vivo', 'envivo')}
+        ${seg('cv-res', 'Resultados', 'resultados')}
       </div>
       <div id="cv-body"><div class="text-center text-slate-500 py-10">Cargando…</div></div>
     </div>`;
   $('#cv-prox').onclick = () => { carteleraView = 'proximos'; renderCartelera(); };
+  $('#cv-live').onclick = () => { carteleraView = 'envivo'; renderCartelera(); };
   $('#cv-res').onclick = () => { carteleraView = 'resultados'; renderCartelera(); };
-  if (prox) await renderProximos($('#cv-body')); else await renderResultados($('#cv-body'));
+
+  const body = $('#cv-body');
+  if (carteleraView === 'proximos') await renderProximos(body);
+  else if (carteleraView === 'envivo') { await renderEnVivo(body); liveTimer = setInterval(() => renderEnVivo(body), 45000); }
+  else await renderResultados(body);
+}
+
+/* ---------------- En vivo ---------------- */
+let liveTimer = null;
+function clearLiveTimer() { if (liveTimer) { clearInterval(liveTimer); liveTimer = null; } }
+
+async function renderEnVivo(body) {
+  if (!document.body.contains(body)) { clearLiveTimer(); return; }
+  try {
+    const live = await api('/live');
+    if (!live.length) {
+      body.innerHTML = `<div class="text-center text-slate-500 py-10">No hay partidos en vivo ahora mismo.</div>`;
+      return;
+    }
+    body.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${live.map(liveCard).join('')}</div>`;
+  } catch (e) {
+    body.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
+  }
+}
+
+function liveCard(m) {
+  const badge = m.estado === 'PAUSED'
+    ? `<span class="text-[10px] font-bold text-amber-400">⏸ DESCANSO</span>`
+    : `<span class="text-[10px] font-bold text-red-500 animate-pulse">🔴 EN VIVO</span>`;
+  return `
+    <div class="bg-slate-800 rounded-xl p-3 ring-1 ring-red-500/30">
+      <div class="flex justify-between items-center mb-2">
+        <div class="text-[10px] text-slate-400 truncate">${faseLabel(m.fase, m.grupo)}</div>
+        ${badge}
+      </div>
+      <div class="flex items-center justify-between text-sm font-semibold gap-2">
+        <span class="flex items-center gap-1 flex-1 min-w-0">${escudo(m.escudoLocal, m.local)}<span class="truncate">${m.local}</span></span>
+        <span class="px-2 py-1 rounded-lg bg-slate-700 font-bold tabular-nums">${m.golesLocal ?? 0} : ${m.golesVisitante ?? 0}</span>
+        <span class="flex items-center gap-1 flex-1 min-w-0 justify-end"><span class="truncate">${m.visitante}</span>${escudo(m.escudoVisitante, m.visitante)}</span>
+      </div>
+    </div>`;
 }
 
 async function renderProximos(body) {

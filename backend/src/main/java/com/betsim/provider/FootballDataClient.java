@@ -50,6 +50,7 @@ public class FootballDataClient {
             Integer homeGoals, Integer awayGoals, String winner) {
 
         public boolean finished() { return "FINISHED".equals(status); }
+        public boolean live() { return "IN_PLAY".equals(status) || "PAUSED".equals(status); }
         public boolean knockout() { return stage != null && !"GROUP_STAGE".equals(stage); }
     }
 

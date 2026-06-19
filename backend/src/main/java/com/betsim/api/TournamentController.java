@@ -44,6 +44,19 @@ public class TournamentController {
                                Integer golesLocal, Integer golesVisitante, String estado, String ganador) {}
     public record BracketStage(String fase, List<BracketMatch> partidos) {}
 
+    /** Partidos en juego ahora mismo, con su marcador en directo (football-data). */
+    @GetMapping("/live")
+    public List<MatchResult> live() {
+        if (!footballData.enabled()) return List.of();
+        return footballData.matches().stream()
+                .filter(FdMatch::live)
+                .sorted(Comparator.comparing(FdMatch::utcDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(m -> new MatchResult(m.stage(), m.group(), m.utcDate(),
+                        m.homeName(), m.awayName(), m.homeCrest(), m.awayCrest(),
+                        m.homeGoals(), m.awayGoals(), m.status(), m.winner()))
+                .toList();
+    }
+
     /** Todos los partidos ya jugados (football-data) o, en su defecto, los de nuestra BD. */
     @GetMapping("/results")
     public List<MatchResult> results() {
