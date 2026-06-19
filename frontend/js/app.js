@@ -215,9 +215,10 @@ async function renderEnVivo(body) {
 }
 
 function liveCard(m) {
+  const min = (m.minuto != null && m.minuto !== '') ? `${m.minuto}'` : '';
   const badge = m.estado === 'PAUSED'
     ? `<span class="text-[10px] font-bold text-amber-400">⏸ DESCANSO</span>`
-    : `<span class="text-[10px] font-bold text-red-500 animate-pulse">🔴 EN VIVO</span>`;
+    : `<span class="text-[10px] font-bold text-red-500"><span class="animate-pulse">🔴 EN VIVO</span>${min ? ` · ${min}` : ''}</span>`;
   return `
     <div class="bg-slate-800 rounded-xl p-3 ring-1 ring-red-500/30">
       <div class="flex justify-between items-center mb-2">

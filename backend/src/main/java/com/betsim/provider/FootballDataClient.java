@@ -47,7 +47,7 @@ public class FootballDataClient {
     public record FdMatch(
             long id, Instant utcDate, String status, String stage, String group,
             String homeName, String awayName, String homeCrest, String awayCrest,
-            Integer homeGoals, Integer awayGoals, String winner) {
+            Integer homeGoals, Integer awayGoals, String winner, String minute) {
 
         public boolean finished() { return "FINISHED".equals(status); }
         public boolean live() { return "IN_PLAY".equals(status) || "PAUSED".equals(status); }
@@ -94,6 +94,7 @@ public class FootballDataClient {
                 (String) home.get("crest"), (String) away.get("crest"),
                 ft.get("home") == null ? null : ((Number) ft.get("home")).intValue(),
                 ft.get("away") == null ? null : ((Number) ft.get("away")).intValue(),
-                (String) score.get("winner"));
+                (String) score.get("winner"),
+                m.get("minute") == null ? null : String.valueOf(m.get("minute")));
     }
 }

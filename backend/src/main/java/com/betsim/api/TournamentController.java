@@ -38,7 +38,7 @@ public class TournamentController {
 
     public record MatchResult(String fase, String grupo, Instant fecha,
                               String local, String visitante, String escudoLocal, String escudoVisitante,
-                              Integer golesLocal, Integer golesVisitante, String estado, String ganador) {}
+                              Integer golesLocal, Integer golesVisitante, String estado, String ganador, String minuto) {}
 
     public record BracketMatch(String local, String visitante, String escudoLocal, String escudoVisitante,
                                Integer golesLocal, Integer golesVisitante, String estado, String ganador) {}
@@ -53,7 +53,7 @@ public class TournamentController {
                 .sorted(Comparator.comparing(FdMatch::utcDate, Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(m -> new MatchResult(m.stage(), m.group(), m.utcDate(),
                         m.homeName(), m.awayName(), m.homeCrest(), m.awayCrest(),
-                        m.homeGoals(), m.awayGoals(), m.status(), m.winner()))
+                        m.homeGoals(), m.awayGoals(), m.status(), m.winner(), m.minute()))
                 .toList();
     }
 
@@ -66,7 +66,7 @@ public class TournamentController {
                     .sorted(Comparator.comparing(FdMatch::utcDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                     .map(m -> new MatchResult(m.stage(), m.group(), m.utcDate(),
                             m.homeName(), m.awayName(), m.homeCrest(), m.awayCrest(),
-                            m.homeGoals(), m.awayGoals(), m.status(), m.winner()))
+                            m.homeGoals(), m.awayGoals(), m.status(), m.winner(), null))
                     .toList();
         }
         // Fallback: resultados de nuestra BD (lo ya jugado y liquidado por The Odds API).
@@ -74,7 +74,7 @@ public class TournamentController {
                         List.of(EstadoPartido.FINALIZADO, EstadoPartido.LIQUIDADO)).stream()
                 .map(p -> new MatchResult(p.getFase() == null ? null : p.getFase().name(), null, p.getInicioUtc(),
                         p.getEquipoLocal(), p.getEquipoVisitante(), null, null,
-                        p.getGolesLocal(), p.getGolesVisitante(), "FINISHED", null))
+                        p.getGolesLocal(), p.getGolesVisitante(), "FINISHED", null, null))
                 .toList();
     }
 
