@@ -2,6 +2,7 @@ package com.betsim.scheduler;
 
 import com.betsim.domain.*;
 import com.betsim.domain.Enums.TipoMercado;
+import com.betsim.provider.ProviderDtos;
 import com.betsim.provider.ProviderDtos.ProviderMatch;
 import com.betsim.provider.SportsDataProvider;
 import com.betsim.repository.*;
@@ -63,12 +64,14 @@ public class IngestService {
             upsertOpcion(m1x2, "EMPATE", "Empate", pm.cuotaEmpate(), pm.casaEmpate(), null);
             upsertOpcion(m1x2, "VISITANTE", p.getEquipoVisitante(), pm.cuotaVisitante(), pm.casaVisitante(), null);
 
-            // Over/Under (solo si el proveedor aporta totals).
-            if (pm.lineaOU() != null && pm.cuotaOver() != null && pm.cuotaUnder() != null) {
+            // Over/Under: una pareja de opciones por cada línea (0.5, 1.5, 2.5, ...).
+            if (pm.overUnder() != null && !pm.overUnder().isEmpty()) {
                 Mercado mou = mercado(p, TipoMercado.OVER_UNDER);
-                String linea = pm.lineaOU().stripTrailingZeros().toPlainString();
-                upsertOpcion(mou, "OVER", "Más de " + linea + " goles", pm.cuotaOver(), pm.casaOver(), pm.lineaOU());
-                upsertOpcion(mou, "UNDER", "Menos de " + linea + " goles", pm.cuotaUnder(), pm.casaUnder(), pm.lineaOU());
+                for (ProviderDtos.OverUnder ou : pm.overUnder()) {
+                    String l = ou.linea().stripTrailingZeros().toPlainString();
+                    upsertOpcion(mou, "OVER_" + l, "Más de " + l + " goles", ou.cuotaOver(), ou.casaOver(), ou.linea());
+                    upsertOpcion(mou, "UNDER_" + l, "Menos de " + l + " goles", ou.cuotaUnder(), ou.casaUnder(), ou.linea());
+                }
             }
 
             // Doble oportunidad (derivada del 1X2: combinación justa de dos resultados).

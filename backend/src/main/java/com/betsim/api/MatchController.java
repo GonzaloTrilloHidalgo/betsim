@@ -36,11 +36,25 @@ public class MatchController {
                             String fase, String estado, Integer golesLocal, Integer golesVisitante,
                             List<MarketView> mercados) {}
     public record LeagueView(Long id, String nombre, String pais) {}
+    public record ResultView(Long id, String equipoLocal, String equipoVisitante, Instant inicioUtc,
+                             String fase, Integer golesLocal, Integer golesVisitante) {}
 
     @GetMapping("/matches")
     public List<MatchView> upcoming() {
         return partidos.findByEstadoOrderByInicioUtcAsc(EstadoPartido.PROGRAMADO).stream()
                 .map(this::toView).toList();
+    }
+
+    /** Partidos ya jugados con su marcador (más recientes primero). */
+    @GetMapping("/matches/results")
+    public List<ResultView> results() {
+        return partidos.findByEstadoInOrderByInicioUtcDesc(
+                        List.of(EstadoPartido.FINALIZADO, EstadoPartido.LIQUIDADO)).stream()
+                .limit(60)
+                .map(p -> new ResultView(p.getId(), p.getEquipoLocal(), p.getEquipoVisitante(),
+                        p.getInicioUtc(), p.getFase() == null ? null : p.getFase().name(),
+                        p.getGolesLocal(), p.getGolesVisitante()))
+                .toList();
     }
 
     @GetMapping("/matches/{id}")

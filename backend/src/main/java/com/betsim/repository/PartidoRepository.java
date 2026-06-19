@@ -15,6 +15,8 @@ public interface PartidoRepository extends JpaRepository<Partido, Long> {
 
     List<Partido> findByEstadoOrderByInicioUtcAsc(EstadoPartido estado);
 
+    List<Partido> findByEstadoInOrderByInicioUtcDesc(java.util.Collection<EstadoPartido> estados);
+
     @Query("select p from Partido p where p.estado = :estado and p.inicioUtc <= :limite")
     List<Partido> findReadyToSettle(@Param("estado") EstadoPartido estado, @Param("limite") Instant limite);
 }

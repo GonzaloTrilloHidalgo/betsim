@@ -153,18 +153,30 @@ async function render() {
 }
 
 /* ---------------- Cartelera ---------------- */
+let carteleraView = 'proximos';
 async function renderCartelera() {
   const c = $('#content');
-  c.innerHTML = `<div class="text-center text-slate-500 py-10">Cargando partidos…</div>`;
+  const prox = carteleraView === 'proximos';
+  c.innerHTML = `
+    <div class="mx-auto w-full max-w-5xl">
+      <div class="flex bg-slate-800 rounded-xl p-1 mb-4 max-w-md">
+        <button id="cv-prox" class="flex-1 py-2 rounded-lg text-sm font-semibold ${prox ? 'bg-green-600' : 'text-slate-300'}">Próximos</button>
+        <button id="cv-res" class="flex-1 py-2 rounded-lg text-sm font-semibold ${!prox ? 'bg-green-600' : 'text-slate-300'}">Resultados</button>
+      </div>
+      <div id="cv-body"><div class="text-center text-slate-500 py-10">Cargando…</div></div>
+    </div>`;
+  $('#cv-prox').onclick = () => { carteleraView = 'proximos'; renderCartelera(); };
+  $('#cv-res').onclick = () => { carteleraView = 'resultados'; renderCartelera(); };
+  if (prox) await renderProximos($('#cv-body')); else await renderResultados($('#cv-body'));
+}
+
+async function renderProximos(body) {
   try {
     const matches = await api('/matches');
-    if (!matches.length) { c.innerHTML = `<div class="text-center text-slate-500 py-10">No hay partidos disponibles.</div>`; return; }
-    c.innerHTML = `<div class="mx-auto w-full max-w-5xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      ${matches.map(matchCard).join('')}</div>`;
-    c.querySelectorAll('[data-opt]').forEach((btn) => {
-      btn.onclick = () => toggleSelection(btn);
-    });
-    c.querySelectorAll('.more-btn').forEach((btn) => {
+    if (!matches.length) { body.innerHTML = `<div class="text-center text-slate-500 py-10">No hay partidos próximos.</div>`; return; }
+    body.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${matches.map(matchCard).join('')}</div>`;
+    body.querySelectorAll('[data-opt]').forEach((btn) => { btn.onclick = () => toggleSelection(btn); });
+    body.querySelectorAll('.more-btn').forEach((btn) => {
       btn.onclick = () => {
         const panel = document.getElementById(btn.dataset.target);
         const oculto = panel.classList.toggle('hidden');
@@ -173,15 +185,43 @@ async function renderCartelera() {
     });
     refreshOddButtons();
   } catch (e) {
-    c.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
+    body.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
   }
+}
+
+async function renderResultados(body) {
+  try {
+    const results = await api('/matches/results');
+    if (!results.length) { body.innerHTML = `<div class="text-center text-slate-500 py-10">Aún no hay partidos jugados.</div>`; return; }
+    body.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${results.map(resultCard).join('')}</div>`;
+  } catch (e) {
+    body.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
+  }
+}
+
+function resultCard(m) {
+  const gl = m.golesLocal, gv = m.golesVisitante;
+  const win = (a, b) => a > b ? 'text-green-400' : a < b ? 'text-slate-400' : 'text-slate-200';
+  return `
+    <div class="bg-slate-800 rounded-xl p-3">
+      <div class="flex justify-between items-center mb-2">
+        <div class="text-[10px] text-slate-400">${m.fase || ''}</div>
+        <div class="text-[10px] text-slate-400">${fmtDate(m.inicioUtc)} · Final</div>
+      </div>
+      <div class="flex items-center justify-between text-sm font-semibold gap-2">
+        <span class="flex items-center gap-1 flex-1 min-w-0 ${win(gl, gv)}">${flag(m.equipoLocal)}<span class="truncate">${m.equipoLocal}</span></span>
+        <span class="px-2 py-1 rounded-lg bg-slate-700 font-bold tabular-nums">${gl ?? '-'} : ${gv ?? '-'}</span>
+        <span class="flex items-center gap-1 flex-1 min-w-0 justify-end ${win(gv, gl)}"><span class="truncate">${m.equipoVisitante}</span>${flag(m.equipoVisitante)}</span>
+      </div>
+    </div>`;
 }
 
 // Botón de cuota genérico para cualquier mercado.
 function oddBtn(m, o, top) {
   if (!o) return `<div class="flex-1"></div>`;
   return `
-    <button data-opt="${o.id}" data-cuota="${o.cuota}" data-label="${m.equipoLocal} vs ${m.equipoVisitante} · ${o.descripcion}"
+    <button data-opt="${o.id}" data-match="${m.id}" data-cuota="${o.cuota}"
+            data-label="${m.equipoLocal} vs ${m.equipoVisitante} · ${o.descripcion}"
             class="flex-1 min-w-0 bg-slate-700 rounded-lg py-1.5 active:bg-slate-600 transition">
       <div class="text-[10px] text-slate-400 truncate px-1">${top}</div>
       <div class="font-bold text-sm">${fmt(o.cuota)}</div>
@@ -189,12 +229,26 @@ function oddBtn(m, o, top) {
     </button>`;
 }
 
-// Bloque de un mercado: pequeño título + fila de botones.
-function marketBlock(title, buttons) {
+// Bloque de un mercado: pequeño título + contenido.
+function marketBlock(title, content) {
   return `<div class="mt-2">
       <div class="text-[10px] text-slate-400 mb-1">${title}</div>
-      <div class="flex gap-1.5">${buttons}</div>
+      ${content}
     </div>`;
+}
+
+// Bloque Over/Under: una fila por línea (0.5, 1.5, 2.5...) con etiquetas claras.
+function overUnderBlock(m, mou) {
+  const lineas = [...new Set(mou.opciones.map((o) => o.linea))].sort((a, b) => a - b);
+  const find = (code) => mou.opciones.find((o) => o.codigo === code);
+  const rows = lineas.map((ln) => {
+    const l = String(ln).replace(/\.0$/, '');
+    return `<div class="flex gap-1.5 mb-1.5">
+        ${oddBtn(m, find('OVER_' + l), 'Más de ' + l)}
+        ${oddBtn(m, find('UNDER_' + l), 'Menos de ' + l)}
+      </div>`;
+  }).join('');
+  return marketBlock('Goles (Over/Under)', rows);
 }
 
 function matchCard(m) {
@@ -209,12 +263,11 @@ function matchCard(m) {
   // Mercados adicionales (si existen).
   const mou = market('OVER_UNDER'), mdc = market('DOBLE_OPORTUNIDAD'), mbtts = market('AMBOS_MARCAN');
   let extra = '';
-  if (mou) extra += marketBlock('Goles (Over/Under)',
-    oddBtn(m, opt(mou, 'OVER'), 'Más') + oddBtn(m, opt(mou, 'UNDER'), 'Menos'));
-  if (mdc) extra += marketBlock('Doble oportunidad',
-    oddBtn(m, opt(mdc, '1X'), '1X') + oddBtn(m, opt(mdc, '12'), '12') + oddBtn(m, opt(mdc, 'X2'), 'X2'));
-  if (mbtts) extra += marketBlock('Ambos marcan',
-    oddBtn(m, opt(mbtts, 'BTTS_SI'), 'Sí') + oddBtn(m, opt(mbtts, 'BTTS_NO'), 'No'));
+  if (mou && mou.opciones.length) extra += overUnderBlock(m, mou);
+  if (mdc) extra += marketBlock('Doble oportunidad', `<div class="flex gap-1.5">
+    ${oddBtn(m, opt(mdc, '1X'), '1X')}${oddBtn(m, opt(mdc, '12'), '12')}${oddBtn(m, opt(mdc, 'X2'), 'X2')}</div>`);
+  if (mbtts) extra += marketBlock('Ambos marcan', `<div class="flex gap-1.5">
+    ${oddBtn(m, opt(mbtts, 'BTTS_SI'), 'Sí')}${oddBtn(m, opt(mbtts, 'BTTS_NO'), 'No')}</div>`);
 
   const more = extra ? `
       <button class="more-btn w-full mt-2 text-[11px] text-green-400" data-target="extra-${m.id}">+ Más apuestas</button>
@@ -239,11 +292,16 @@ function matchCard(m) {
 /* ---------------- Bet slip ---------------- */
 function toggleSelection(btn) {
   const id = Number(btn.dataset.opt);
+  const matchId = Number(btn.dataset.match);
   const idx = slip.findIndex((s) => s.opcionCuotaId === id);
   if (idx >= 0) {
+    // Ya estaba seleccionada -> quitarla.
     slip.splice(idx, 1);
   } else {
-    slip.push({ opcionCuotaId: id, label: btn.dataset.label, cuota: Number(btn.dataset.cuota) });
+    // Solo se permite UNA selección por partido (no se pueden combinar mercados del mismo partido).
+    // Al elegir otra opción del mismo partido, sustituye a la anterior (Más/Menos, 1X/12/X2, Sí/No...).
+    slip = slip.filter((s) => s.matchId !== matchId);
+    slip.push({ opcionCuotaId: id, matchId, label: btn.dataset.label, cuota: Number(btn.dataset.cuota) });
   }
   refreshOddButtons();
   renderSlip();

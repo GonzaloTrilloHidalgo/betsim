@@ -1,5 +1,6 @@
 package com.betsim.provider;
 
+import com.betsim.provider.ProviderDtos.OverUnder;
 import com.betsim.provider.ProviderDtos.ProviderMatch;
 import com.betsim.provider.ProviderDtos.ProviderResult;
 import org.slf4j.Logger;
@@ -10,12 +11,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 /**
  * Implementación real contra The Odds API (mercado h2h = 1X2). Se activa con
@@ -81,9 +84,8 @@ public class TheOddsApiProvider implements SportsDataProvider {
             // Mejor cuota disponible (la más alta entre todas las casas) para cada resultado,
             // guardando además qué casa la ofrece.
             Best local = new Best(), draw = new Best(), visit = new Best();
-            // Over/Under: elegimos la línea 2.5 (la más habitual) y la mejor cuota de cada lado.
-            final BigDecimal LINEA_OU = new BigDecimal("2.5");
-            Best over = new Best(), under = new Best();
+            // Over/Under: mejor cuota de cada lado por cada línea (solo medias líneas, sin empate posible).
+            Map<BigDecimal, Best> overByLine = new TreeMap<>(), underByLine = new TreeMap<>();
             List<Map<String, Object>> books = (List<Map<String, Object>>) ev.getOrDefault("bookmakers", List.of());
             for (Map<String, Object> book : books) {
                 String casa = (String) book.getOrDefault("title", book.get("key"));
@@ -102,23 +104,34 @@ public class TheOddsApiProvider implements SportsDataProvider {
                     } else if ("totals".equals(key)) {
                         for (Map<String, Object> oc : outcomes) {
                             if (oc.get("point") == null) continue;
-                            if (LINEA_OU.compareTo(new BigDecimal(String.valueOf(oc.get("point")))) != 0) continue;
+                            BigDecimal linea = new BigDecimal(String.valueOf(oc.get("point"))).setScale(1, RoundingMode.HALF_UP);
+                            if (!esMediaLinea(linea)) continue; // X.5 (sin posibilidad de "push")
                             BigDecimal price = new BigDecimal(String.valueOf(oc.get("price")));
-                            if ("Over".equalsIgnoreCase(String.valueOf(oc.get("name")))) over.offer(price, casa);
-                            else if ("Under".equalsIgnoreCase(String.valueOf(oc.get("name")))) under.offer(price, casa);
+                            String name = String.valueOf(oc.get("name"));
+                            if ("Over".equalsIgnoreCase(name)) overByLine.computeIfAbsent(linea, k -> new Best()).offer(price, casa);
+                            else if ("Under".equalsIgnoreCase(name)) underByLine.computeIfAbsent(linea, k -> new Best()).offer(price, casa);
                         }
                     }
                 }
             }
             if (local.price == null || draw.price == null || visit.price == null) continue; // sin 1X2 completo
-            boolean hayOU = over.price != null && under.price != null;
+
+            List<OverUnder> ou = new ArrayList<>();
+            for (BigDecimal linea : overByLine.keySet()) {
+                Best o = overByLine.get(linea), u = underByLine.get(linea);
+                if (o != null && u != null) ou.add(new OverUnder(linea, o.price, u.price, o.casa, u.casa));
+            }
             // The Odds API no aporta la fase del torneo -> la dejamos sin etiqueta (null).
             out.add(new ProviderMatch((String) ev.get("id"), home, away, kickoff, null,
-                    local.price, draw.price, visit.price, local.casa, draw.casa, visit.casa,
-                    hayOU ? LINEA_OU : null, over.price, under.price, over.casa, under.casa));
+                    local.price, draw.price, visit.price, local.casa, draw.casa, visit.casa, ou));
         }
         log.info("The Odds API: {} partidos con cuotas 1X2 obtenidos (mejor cuota disponible).", out.size());
         return out;
+    }
+
+    /** True si la línea es de tipo X.5 (no puede haber empate exacto con el total de goles). */
+    private static boolean esMediaLinea(BigDecimal linea) {
+        return linea.remainder(BigDecimal.ONE).compareTo(new BigDecimal("0.5")) == 0;
     }
 
     /** Acumula la mejor (más alta) cuota vista y la casa que la ofrece. */

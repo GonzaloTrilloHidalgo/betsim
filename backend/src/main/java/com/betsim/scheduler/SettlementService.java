@@ -94,7 +94,7 @@ public class SettlementService {
             };
             case OVER_UNDER -> {
                 double linea = oc.getLinea() == null ? 2.5 : oc.getLinea().doubleValue();
-                yield "OVER".equals(codigo) ? total > linea : total < linea;
+                yield codigo.startsWith("OVER") ? total > linea : total < linea;
             }
             case AMBOS_MARCAN -> {
                 boolean ambos = gl > 0 && gv > 0;

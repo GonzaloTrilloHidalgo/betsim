@@ -1,6 +1,7 @@
 package com.betsim.provider;
 
 import com.betsim.domain.Enums.Fase;
+import com.betsim.provider.ProviderDtos.OverUnder;
 import com.betsim.provider.ProviderDtos.ProviderMatch;
 import com.betsim.provider.ProviderDtos.ProviderResult;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -45,11 +46,16 @@ public class MockSportsDataProvider implements SportsDataProvider {
             BigDecimal cl = cuota(r, 1.5, 3.5);
             BigDecimal ce = cuota(r, 2.8, 3.8);
             BigDecimal cv = cuota(r, 1.5, 3.5);
-            BigDecimal over = cuota(r, 1.6, 2.3);
-            BigDecimal under = cuota(r, 1.6, 2.3);
+            // Varias líneas de Over/Under con cuotas plausibles (over más barato en líneas bajas).
+            double[][] rangos = {{0.5, 1.04, 1.12, 5.0, 9.0}, {1.5, 1.30, 1.55, 2.5, 3.2},
+                                 {2.5, 1.85, 2.30, 1.55, 1.90}, {3.5, 3.30, 4.60, 1.18, 1.30}};
+            List<OverUnder> ou = new ArrayList<>();
+            for (double[] g : rangos) {
+                ou.add(new OverUnder(BigDecimal.valueOf(g[0]), cuota(r, g[1], g[2]), cuota(r, g[3], g[4]),
+                        "Simulada", "Simulada"));
+            }
             partidos.add(new ProviderMatch(externalId, DUELOS[i][0], DUELOS[i][1], kickoff,
-                    Fase.GRUPOS, cl, ce, cv, "Simulada", "Simulada", "Simulada",
-                    new BigDecimal("2.5"), over, under, "Simulada", "Simulada"));
+                    Fase.GRUPOS, cl, ce, cv, "Simulada", "Simulada", "Simulada", ou));
         }
     }
 
