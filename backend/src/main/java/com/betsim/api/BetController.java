@@ -38,6 +38,8 @@ public class BetController {
     public record BetView(Long id, String tipo, BigDecimal importe, BigDecimal cuotaTotal,
                           BigDecimal retornoPotencial, String estado, Instant creadoEn, Instant resueltoEn,
                           List<SelectionView> selecciones) {}
+    public record FeedBetView(Long id, String username, String tipo, BigDecimal importe, BigDecimal cuotaTotal,
+                              BigDecimal retornoPotencial, Instant creadoEn, List<SelectionView> selecciones) {}
 
     @PostMapping
     public BetView create(@AuthenticationPrincipal AuthPrincipal me,
@@ -64,6 +66,20 @@ public class BetController {
             result = apuestas.findByUsuarioIdOrderByCreadoEnDesc(me.userId());
         }
         return result.stream().map(this::toView).toList();
+    }
+
+    /** Feed social: apuestas activas (PENDIENTE) de todos los usuarios, con su nombre. */
+    @GetMapping("/feed")
+    @Transactional(readOnly = true)
+    public List<FeedBetView> feed() {
+        return apuestas.findByEstadoOrderByCreadoEnDesc(EstadoApuesta.PENDIENTE).stream()
+                .limit(100)
+                .map(a -> new FeedBetView(a.getId(), a.getUsuario().getUsername(), a.getTipo().name(),
+                        a.getImporte(), a.getCuotaTotal(), a.getRetornoPotencial(), a.getCreadoEn(),
+                        a.getSelecciones().stream()
+                                .map(s -> new SelectionView(s.getDescripcionSnapshot(), s.getCuotaCongelada(), s.getResultado().name()))
+                                .toList()))
+                .toList();
     }
 
     @GetMapping("/{id}")

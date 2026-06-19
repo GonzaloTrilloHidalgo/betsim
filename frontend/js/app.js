@@ -523,28 +523,57 @@ async function confirmBet() {
 let apuestasFilter = 'PENDIENTE';
 async function renderApuestas() {
   const c = $('#content');
+  const seg = (id, label, val) =>
+    `<button id="${id}" class="flex-1 py-2 rounded-lg text-sm font-semibold ${apuestasFilter === val ? 'bg-green-600' : 'text-slate-300'}">${label}</button>`;
   c.innerHTML = `
     <div class="mx-auto w-full max-w-2xl">
       <div class="flex bg-slate-800 rounded-xl p-1 mb-4">
-        <button id="f-pend" class="flex-1 py-2 rounded-lg text-sm font-semibold">Pendientes</button>
-        <button id="f-res" class="flex-1 py-2 rounded-lg text-sm font-semibold">Resueltas</button>
+        ${seg('f-pend', 'Pendientes', 'PENDIENTE')}
+        ${seg('f-res', 'Resueltas', 'RESUELTO')}
+        ${seg('f-feed', '👥 De todos', 'FEED')}
       </div>
       <div id="bets-list"><div class="text-center text-slate-500 py-10">Cargando…</div></div>
     </div>`;
   $('#f-pend').onclick = () => { apuestasFilter = 'PENDIENTE'; renderApuestas(); };
   $('#f-res').onclick = () => { apuestasFilter = 'RESUELTO'; renderApuestas(); };
-  const pend = apuestasFilter === 'PENDIENTE';
-  $('#f-pend').className = `flex-1 py-2 rounded-lg text-sm font-semibold ${pend ? 'bg-green-600' : 'text-slate-300'}`;
-  $('#f-res').className = `flex-1 py-2 rounded-lg text-sm font-semibold ${!pend ? 'bg-green-600' : 'text-slate-300'}`;
+  $('#f-feed').onclick = () => { apuestasFilter = 'FEED'; renderApuestas(); };
 
+  const list = $('#bets-list');
   try {
-    const bets = await api(`/bets?estado=${apuestasFilter}`);
-    const list = $('#bets-list');
-    if (!bets.length) { list.innerHTML = `<div class="text-center text-slate-500 py-10">Sin apuestas aquí.</div>`; return; }
-    list.innerHTML = bets.map(betCard).join('');
+    if (apuestasFilter === 'FEED') {
+      const bets = await api('/bets/feed');
+      if (!bets.length) { list.innerHTML = `<div class="text-center text-slate-500 py-10">Nadie tiene apuestas activas ahora mismo.</div>`; return; }
+      list.innerHTML = bets.map(feedCard).join('');
+    } else {
+      const bets = await api(`/bets?estado=${apuestasFilter}`);
+      if (!bets.length) { list.innerHTML = `<div class="text-center text-slate-500 py-10">Sin apuestas aquí.</div>`; return; }
+      list.innerHTML = bets.map(betCard).join('');
+    }
   } catch (e) {
-    $('#bets-list').innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
+    list.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
   }
+}
+
+function feedCard(b) {
+  const sels = b.selecciones.map((s) => `
+    <div class="flex justify-between text-sm py-1 border-t border-slate-700/60">
+      <span class="text-slate-300 pr-2">${s.descripcion}</span>
+      <span class="text-slate-200 font-semibold">${fmt(s.cuota)}</span>
+    </div>`).join('');
+  return `
+    <div class="bg-slate-800 rounded-2xl p-4 mb-3">
+      <div class="flex justify-between items-center mb-1">
+        <span class="font-bold text-green-400">👤 ${b.username}</span>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-slate-700">${b.tipo}</span>
+      </div>
+      <div class="text-[11px] text-slate-400 mb-2">${fmtDate(b.creadoEn)}</div>
+      ${sels}
+      <div class="flex justify-between mt-3 text-sm">
+        <span class="text-slate-400">Importe <b class="text-slate-200">${fmt(b.importe)}</b></span>
+        <span class="text-slate-400">Cuota <b class="text-slate-200">${fmt(b.cuotaTotal)}</b></span>
+        <span class="text-slate-400">Gana <b class="text-green-400">${fmt(b.retornoPotencial)}</b></span>
+      </div>
+    </div>`;
 }
 
 function betCard(b) {

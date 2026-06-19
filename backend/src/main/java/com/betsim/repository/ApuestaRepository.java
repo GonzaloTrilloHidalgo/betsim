@@ -12,6 +12,7 @@ import java.util.Optional;
 public interface ApuestaRepository extends JpaRepository<Apuesta, Long> {
     List<Apuesta> findByUsuarioIdOrderByCreadoEnDesc(Long usuarioId);
     List<Apuesta> findByUsuarioIdAndEstadoOrderByCreadoEnDesc(Long usuarioId, EstadoApuesta estado);
+    List<Apuesta> findByEstadoOrderByCreadoEnDesc(EstadoApuesta estado);
     Optional<Apuesta> findByIdAndUsuarioId(Long id, Long usuarioId);
 
     @Query("""
