@@ -32,12 +32,17 @@ public class OpcionCuota {
     @Column(length = 60)
     private String casa;
 
+    @Column(precision = 5, scale = 1)
+    private BigDecimal linea;
+
     @Column(name = "actualizado_en", nullable = false)
     private Instant actualizadoEn = Instant.now();
 
     public Long getId() { return id; }
     public String getCasa() { return casa; }
     public void setCasa(String casa) { this.casa = casa; }
+    public BigDecimal getLinea() { return linea; }
+    public void setLinea(BigDecimal linea) { this.linea = linea; }
     public Mercado getMercado() { return mercado; }
     public void setMercado(Mercado mercado) { this.mercado = mercado; }
     public String getCodigo() { return codigo; }

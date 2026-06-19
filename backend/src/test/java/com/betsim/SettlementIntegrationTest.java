@@ -128,4 +128,49 @@ class SettlementIntegrationTest {
         p.setInicioUtc(Instant.now().minus(2, ChronoUnit.HOURS));
         partidos.save(p);
     }
+
+    @Test
+    void mercadosNuevosSeLiquidanSegunSuTipo() {
+        when(provider.fetchUpcomingMatches()).thenReturn(List.of());
+
+        Usuario u = nuevoUsuario("mercados");
+        Liga liga = ligas.findBySportKey("soccer_fifa_world_cup").orElseThrow();
+        Partido p = new Partido();
+        p.setLiga(liga);
+        p.setExternalId("MKT-1");
+        p.setEquipoLocal("Brasil");
+        p.setEquipoVisitante("Haití");
+        p.setInicioUtc(Instant.now().plus(2, ChronoUnit.HOURS));
+        p.setEstado(EstadoPartido.PROGRAMADO);
+        partidos.save(p);
+
+        // Opciones que DEBEN ganar con un resultado 2-1 (local gana, 3 goles, ambos marcan).
+        Mercado mou = mercados.save(new Mercado(p, TipoMercado.OVER_UNDER));
+        Long overId = opcionLinea(mou, "OVER", "Más de 2.5 goles", new BigDecimal("1.90"), new BigDecimal("2.5")).getId();
+        opcionLinea(mou, "UNDER", "Menos de 2.5 goles", new BigDecimal("1.90"), new BigDecimal("2.5"));
+
+        Mercado mdc = mercados.save(new Mercado(p, TipoMercado.DOBLE_OPORTUNIDAD));
+        Long dc1xId = opcion(mdc, "1X", "Brasil o Empate", new BigDecimal("1.30")).getId();
+
+        Mercado mbtts = mercados.save(new Mercado(p, TipoMercado.AMBOS_MARCAN));
+        Long bttsSiId = opcion(mbtts, "BTTS_SI", "Ambos marcan: Sí", new BigDecimal("1.80")).getId();
+
+        Apuesta over = betService.crear(u.getId(), new BigDecimal("10.00"), List.of(overId));
+        Apuesta dc = betService.crear(u.getId(), new BigDecimal("10.00"), List.of(dc1xId));
+        Apuesta btts = betService.crear(u.getId(), new BigDecimal("10.00"), List.of(bttsSiId));
+
+        marcarComoEmpezado("MKT-1");
+        when(provider.fetchResult(any())).thenReturn(Optional.of(new ProviderResult("MKT-1", 2, 1)));
+        settlement.run();
+
+        assertThat(apuestas.findById(over.getId()).orElseThrow().getEstado()).isEqualTo(EstadoApuesta.GANADA);
+        assertThat(apuestas.findById(dc.getId()).orElseThrow().getEstado()).isEqualTo(EstadoApuesta.GANADA);
+        assertThat(apuestas.findById(btts.getId()).orElseThrow().getEstado()).isEqualTo(EstadoApuesta.GANADA);
+    }
+
+    private OpcionCuota opcionLinea(Mercado m, String codigo, String desc, BigDecimal cuota, BigDecimal linea) {
+        OpcionCuota o = opcion(m, codigo, desc, cuota);
+        o.setLinea(linea);
+        return opciones.save(o);
+    }
 }

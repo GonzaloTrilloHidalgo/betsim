@@ -45,8 +45,11 @@ public class MockSportsDataProvider implements SportsDataProvider {
             BigDecimal cl = cuota(r, 1.5, 3.5);
             BigDecimal ce = cuota(r, 2.8, 3.8);
             BigDecimal cv = cuota(r, 1.5, 3.5);
+            BigDecimal over = cuota(r, 1.6, 2.3);
+            BigDecimal under = cuota(r, 1.6, 2.3);
             partidos.add(new ProviderMatch(externalId, DUELOS[i][0], DUELOS[i][1], kickoff,
-                    Fase.GRUPOS, cl, ce, cv, "Simulada", "Simulada", "Simulada"));
+                    Fase.GRUPOS, cl, ce, cv, "Simulada", "Simulada", "Simulada",
+                    new BigDecimal("2.5"), over, under, "Simulada", "Simulada"));
         }
     }
 

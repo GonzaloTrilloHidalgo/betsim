@@ -59,7 +59,7 @@ public class TheOddsApiProvider implements SportsDataProvider {
     @SuppressWarnings("unchecked")
     public List<ProviderMatch> fetchUpcomingMatches() {
         String url = BASE + "/sports/" + sportKey + "/odds?regions=" + region
-                + "&markets=h2h&oddsFormat=decimal&apiKey=" + apiKey;
+                + "&markets=h2h,totals&oddsFormat=decimal&apiKey=" + apiKey;
         List<Map<String, Object>> events;
         try {
             events = http.get().uri(url).retrieve().body(List.class);
@@ -81,25 +81,41 @@ public class TheOddsApiProvider implements SportsDataProvider {
             // Mejor cuota disponible (la más alta entre todas las casas) para cada resultado,
             // guardando además qué casa la ofrece.
             Best local = new Best(), draw = new Best(), visit = new Best();
+            // Over/Under: elegimos la línea 2.5 (la más habitual) y la mejor cuota de cada lado.
+            final BigDecimal LINEA_OU = new BigDecimal("2.5");
+            Best over = new Best(), under = new Best();
             List<Map<String, Object>> books = (List<Map<String, Object>>) ev.getOrDefault("bookmakers", List.of());
             for (Map<String, Object> book : books) {
                 String casa = (String) book.getOrDefault("title", book.get("key"));
                 List<Map<String, Object>> markets = (List<Map<String, Object>>) book.getOrDefault("markets", List.of());
                 for (Map<String, Object> mk : markets) {
-                    if (!"h2h".equals(mk.get("key"))) continue;
-                    for (Map<String, Object> oc : (List<Map<String, Object>>) mk.getOrDefault("outcomes", List.of())) {
-                        String name = (String) oc.get("name");
-                        BigDecimal price = new BigDecimal(String.valueOf(oc.get("price")));
-                        if (name.equalsIgnoreCase(home)) local.offer(price, casa);
-                        else if (name.equalsIgnoreCase(away)) visit.offer(price, casa);
-                        else draw.offer(price, casa); // "Draw"
+                    String key = String.valueOf(mk.get("key"));
+                    List<Map<String, Object>> outcomes = (List<Map<String, Object>>) mk.getOrDefault("outcomes", List.of());
+                    if ("h2h".equals(key)) {
+                        for (Map<String, Object> oc : outcomes) {
+                            String name = (String) oc.get("name");
+                            BigDecimal price = new BigDecimal(String.valueOf(oc.get("price")));
+                            if (name.equalsIgnoreCase(home)) local.offer(price, casa);
+                            else if (name.equalsIgnoreCase(away)) visit.offer(price, casa);
+                            else draw.offer(price, casa); // "Draw"
+                        }
+                    } else if ("totals".equals(key)) {
+                        for (Map<String, Object> oc : outcomes) {
+                            if (oc.get("point") == null) continue;
+                            if (LINEA_OU.compareTo(new BigDecimal(String.valueOf(oc.get("point")))) != 0) continue;
+                            BigDecimal price = new BigDecimal(String.valueOf(oc.get("price")));
+                            if ("Over".equalsIgnoreCase(String.valueOf(oc.get("name")))) over.offer(price, casa);
+                            else if ("Under".equalsIgnoreCase(String.valueOf(oc.get("name")))) under.offer(price, casa);
+                        }
                     }
                 }
             }
             if (local.price == null || draw.price == null || visit.price == null) continue; // sin 1X2 completo
+            boolean hayOU = over.price != null && under.price != null;
             // The Odds API no aporta la fase del torneo -> la dejamos sin etiqueta (null).
             out.add(new ProviderMatch((String) ev.get("id"), home, away, kickoff, null,
-                    local.price, draw.price, visit.price, local.casa, draw.casa, visit.casa));
+                    local.price, draw.price, visit.price, local.casa, draw.casa, visit.casa,
+                    hayOU ? LINEA_OU : null, over.price, under.price, over.casa, under.casa));
         }
         log.info("The Odds API: {} partidos con cuotas 1X2 obtenidos (mejor cuota disponible).", out.size());
         return out;

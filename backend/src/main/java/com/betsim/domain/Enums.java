@@ -10,7 +10,7 @@ public final class Enums {
 
     public enum EstadoPartido { PROGRAMADO, EN_JUEGO, FINALIZADO, LIQUIDADO }
 
-    public enum TipoMercado { UNO_X_DOS, GOLEADOR }
+    public enum TipoMercado { UNO_X_DOS, OVER_UNDER, DOBLE_OPORTUNIDAD, AMBOS_MARCAN, GOLEADOR }
 
     public enum EstadoMercado { ABIERTO, CERRADO, LIQUIDADO }
 

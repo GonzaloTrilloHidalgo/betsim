@@ -60,17 +60,13 @@ public class SettlementService {
         p.setGolesVisitante(res.golesVisitante());
         p.setEstado(EstadoPartido.FINALIZADO);
 
-        Resultado1x2 real = res.golesLocal() > res.golesVisitante() ? Resultado1x2.LOCAL
-                : res.golesLocal() == res.golesVisitante() ? Resultado1x2.EMPATE
-                : Resultado1x2.VISITANTE;
-
         for (Apuesta a : apuestas.findPendingByPartido(p.getId(), EstadoApuesta.PENDIENTE)) {
-            // Resolver las selecciones de ESTE partido.
+            // Resolver las selecciones de ESTE partido según el tipo de mercado.
             for (Seleccion s : a.getSelecciones()) {
                 if (s.getResultado() != ResultadoSeleccion.PENDIENTE) continue;
                 Partido sp = s.getOpcionCuota().getMercado().getPartido();
                 if (!sp.getId().equals(p.getId())) continue;
-                boolean acierto = s.getOpcionCuota().getCodigo().equals(real.name());
+                boolean acierto = acierta(s.getOpcionCuota(), res.golesLocal(), res.golesVisitante());
                 s.setResultado(acierto ? ResultadoSeleccion.ACERTADA : ResultadoSeleccion.FALLADA);
             }
             recalcularApuesta(a);
@@ -80,6 +76,32 @@ public class SettlementService {
         p.setEstado(EstadoPartido.LIQUIDADO);
         log.info("Partido {} liquidado: {} {}-{} {}", p.getExternalId(), p.getEquipoLocal(),
                 res.golesLocal(), res.golesVisitante(), p.getEquipoVisitante());
+    }
+
+    /** Determina si una selección acierta, según el tipo de su mercado y el marcador a 90'. */
+    private boolean acierta(OpcionCuota oc, int gl, int gv) {
+        TipoMercado tipo = oc.getMercado().getTipo();
+        String codigo = oc.getCodigo();
+        Resultado1x2 real = gl > gv ? Resultado1x2.LOCAL : gl == gv ? Resultado1x2.EMPATE : Resultado1x2.VISITANTE;
+        int total = gl + gv;
+        return switch (tipo) {
+            case UNO_X_DOS -> codigo.equals(real.name());
+            case DOBLE_OPORTUNIDAD -> switch (codigo) {
+                case "1X" -> real != Resultado1x2.VISITANTE;
+                case "12" -> real != Resultado1x2.EMPATE;
+                case "X2" -> real != Resultado1x2.LOCAL;
+                default -> false;
+            };
+            case OVER_UNDER -> {
+                double linea = oc.getLinea() == null ? 2.5 : oc.getLinea().doubleValue();
+                yield "OVER".equals(codigo) ? total > linea : total < linea;
+            }
+            case AMBOS_MARCAN -> {
+                boolean ambos = gl > 0 && gv > 0;
+                yield "BTTS_SI".equals(codigo) ? ambos : !ambos;
+            }
+            case GOLEADOR -> false; // se implementará en la v1.1 con datos de goleadores
+        };
     }
 
     private void recalcularApuesta(Apuesta a) {

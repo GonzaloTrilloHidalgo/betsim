@@ -30,7 +30,7 @@ public class MatchController {
         this.ligas = ligas;
     }
 
-    public record OptionView(Long id, String codigo, String descripcion, BigDecimal cuota, boolean disponible, String casa) {}
+    public record OptionView(Long id, String codigo, String descripcion, BigDecimal cuota, boolean disponible, String casa, BigDecimal linea) {}
     public record MarketView(Long id, String tipo, String estado, List<OptionView> opciones) {}
     public record MatchView(Long id, String equipoLocal, String equipoVisitante, Instant inicioUtc,
                             String fase, String estado, Integer golesLocal, Integer golesVisitante,
@@ -58,7 +58,7 @@ public class MatchController {
     private MatchView toView(Partido p) {
         List<MarketView> markets = mercados.findByPartidoId(p.getId()).stream().map(m -> {
             List<OptionView> opts = opciones.findByMercadoId(m.getId()).stream()
-                    .map(o -> new OptionView(o.getId(), o.getCodigo(), o.getDescripcion(), o.getCuota(), o.isDisponible(), o.getCasa()))
+                    .map(o -> new OptionView(o.getId(), o.getCodigo(), o.getDescripcion(), o.getCuota(), o.isDisponible(), o.getCasa(), o.getLinea()))
                     .toList();
             return new MarketView(m.getId(), m.getTipo().name(), m.getEstado().name(), opts);
         }).toList();

@@ -164,23 +164,62 @@ async function renderCartelera() {
     c.querySelectorAll('[data-opt]').forEach((btn) => {
       btn.onclick = () => toggleSelection(btn);
     });
+    c.querySelectorAll('.more-btn').forEach((btn) => {
+      btn.onclick = () => {
+        const panel = document.getElementById(btn.dataset.target);
+        const oculto = panel.classList.toggle('hidden');
+        btn.textContent = oculto ? '+ Más apuestas' : '− Menos apuestas';
+      };
+    });
     refreshOddButtons();
   } catch (e) {
     c.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;
   }
 }
 
-function matchCard(m) {
-  const mkt = (m.mercados || []).find((x) => x.tipo === 'UNO_X_DOS');
-  const opts = mkt ? mkt.opciones : [];
-  const oddBtn = (o) => o ? `
+// Botón de cuota genérico para cualquier mercado.
+function oddBtn(m, o, top) {
+  if (!o) return `<div class="flex-1"></div>`;
+  return `
     <button data-opt="${o.id}" data-cuota="${o.cuota}" data-label="${m.equipoLocal} vs ${m.equipoVisitante} · ${o.descripcion}"
             class="flex-1 min-w-0 bg-slate-700 rounded-lg py-1.5 active:bg-slate-600 transition">
-      <div class="text-[10px] text-slate-400">${o.codigo === 'LOCAL' ? '1' : o.codigo === 'EMPATE' ? 'X' : '2'}</div>
+      <div class="text-[10px] text-slate-400 truncate px-1">${top}</div>
       <div class="font-bold text-sm">${fmt(o.cuota)}</div>
       ${o.casa ? `<div class="text-[9px] text-slate-500 truncate px-1" title="${o.casa}">${o.casa}</div>` : ''}
-    </button>` : `<div class="flex-1"></div>`;
-  const find = (code) => opts.find((o) => o.codigo === code);
+    </button>`;
+}
+
+// Bloque de un mercado: pequeño título + fila de botones.
+function marketBlock(title, buttons) {
+  return `<div class="mt-2">
+      <div class="text-[10px] text-slate-400 mb-1">${title}</div>
+      <div class="flex gap-1.5">${buttons}</div>
+    </div>`;
+}
+
+function matchCard(m) {
+  const market = (tipo) => (m.mercados || []).find((x) => x.tipo === tipo);
+  const opt = (mkt, code) => mkt && mkt.opciones.find((o) => o.codigo === code);
+
+  const m1x2 = market('UNO_X_DOS');
+  const main = `<div class="flex gap-1.5">
+      ${oddBtn(m, opt(m1x2, 'LOCAL'), '1')}${oddBtn(m, opt(m1x2, 'EMPATE'), 'X')}${oddBtn(m, opt(m1x2, 'VISITANTE'), '2')}
+    </div>`;
+
+  // Mercados adicionales (si existen).
+  const mou = market('OVER_UNDER'), mdc = market('DOBLE_OPORTUNIDAD'), mbtts = market('AMBOS_MARCAN');
+  let extra = '';
+  if (mou) extra += marketBlock('Goles (Over/Under)',
+    oddBtn(m, opt(mou, 'OVER'), 'Más') + oddBtn(m, opt(mou, 'UNDER'), 'Menos'));
+  if (mdc) extra += marketBlock('Doble oportunidad',
+    oddBtn(m, opt(mdc, '1X'), '1X') + oddBtn(m, opt(mdc, '12'), '12') + oddBtn(m, opt(mdc, 'X2'), 'X2'));
+  if (mbtts) extra += marketBlock('Ambos marcan',
+    oddBtn(m, opt(mbtts, 'BTTS_SI'), 'Sí') + oddBtn(m, opt(mbtts, 'BTTS_NO'), 'No'));
+
+  const more = extra ? `
+      <button class="more-btn w-full mt-2 text-[11px] text-green-400" data-target="extra-${m.id}">+ Más apuestas</button>
+      <div id="extra-${m.id}" class="hidden">${extra}</div>` : '';
+
   return `
     <div class="bg-slate-800 rounded-xl p-3">
       <div class="flex justify-between items-center mb-2">
@@ -192,9 +231,8 @@ function matchCard(m) {
         <span class="text-slate-500 text-xs px-1">vs</span>
         <span class="flex items-center gap-1 flex-1 min-w-0 justify-end"><span class="truncate">${m.equipoVisitante}</span>${flag(m.equipoVisitante)}</span>
       </div>
-      <div class="flex gap-1.5">
-        ${oddBtn(find('LOCAL'))}${oddBtn(find('EMPATE'))}${oddBtn(find('VISITANTE'))}
-      </div>
+      ${main}
+      ${more}
     </div>`;
 }
 
