@@ -47,7 +47,8 @@ public class BetService {
             throw ApiException.badRequest("Hay selecciones duplicadas");
         }
 
-        Usuario u = usuarios.findById(userId).orElseThrow(() -> ApiException.notFound("Usuario no encontrado"));
+        Usuario u = usuarios.findById(userId)
+                .orElseThrow(() -> ApiException.unauthorized("Sesión no válida: vuelve a iniciar sesión"));
         if (u.getSaldo().compareTo(importe) < 0) {
             throw ApiException.badRequest("Saldo insuficiente");
         }

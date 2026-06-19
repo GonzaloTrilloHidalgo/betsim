@@ -32,7 +32,9 @@ public class WalletService {
     }
 
     public Usuario require(Long userId) {
-        return usuarios.findById(userId).orElseThrow(() -> ApiException.notFound("Usuario no encontrado"));
+        // Si el principal autenticado ya no existe (p. ej. BD reiniciada), la sesión no es válida -> 401.
+        return usuarios.findById(userId)
+                .orElseThrow(() -> ApiException.unauthorized("Sesión no válida: vuelve a iniciar sesión"));
     }
 
     @Transactional
