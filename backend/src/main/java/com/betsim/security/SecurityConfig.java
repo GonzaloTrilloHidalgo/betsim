@@ -40,6 +40,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
+                // Estáticos de la PWA (cuando el backend la sirve en producción).
+                .requestMatchers(HttpMethod.GET, "/", "/index.html", "/manifest.json", "/sw.js",
+                        "/js/**", "/icons/**", "/favicon.ico").permitAll()
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated())
             // Sin autenticación válida -> 401 (no 403), para que el cliente renueve o vuelva al login.

@@ -1,0 +1,42 @@
+# Blueprint de Render: despliega BetSim (backend + PWA) y una base de datos PostgreSQL.
+# En Render: New + > Blueprint > conecta este repositorio. Luego define ODDS_API_KEY (es secreto).
+
+services:
+  - type: web
+    name: betsim
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: BETSIM_PROVIDER
+        value: theoddsapi
+      - key: BETSIM_SPORT_KEY
+        value: soccer_fifa_world_cup
+      # Tu API key de the-odds-api.com. Secreta: se introduce en el panel de Render, no en el repo.
+      - key: ODDS_API_KEY
+        sync: false
+      # Secreto JWT generado automáticamente por Render (no hay que tocarlo).
+      - key: BETSIM_JWT_SECRET
+        generateValue: true
+      # Frecuencias conservadoras para el free tier de la API de cuotas.
+      - key: BETSIM_ODDS_INTERVAL
+        value: PT30M
+      - key: BETSIM_SETTLEMENT_INTERVAL
+        value: PT10M
+      # Conexión a la base de datos (Render rellena estos valores desde betsim-db).
+      - key: DB_HOST
+        fromDatabase: { name: betsim-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: betsim-db, property: port }
+      - key: DB_NAME
+        fromDatabase: { name: betsim-db, property: database }
+      - key: DB_USER
+        fromDatabase: { name: betsim-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: betsim-db, property: password }
+
+databases:
+  - name: betsim-db
+    plan: free

@@ -2,9 +2,14 @@ spring:
   application:
     name: betsim-backend
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/betsim}
+    # DB_URL directo (docker-compose) o construido desde host/puerto/nombre (Render usa estas variables).
+    url: ${DB_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:betsim}}
     username: ${DB_USER:betsim}
     password: ${DB_PASSWORD:betsim}
+  web:
+    resources:
+      # En producción el backend sirve la PWA desde esta carpeta (ver Dockerfile de despliegue).
+      static-locations: ${BETSIM_FRONTEND_PATH:classpath:/static/}
   jpa:
     hibernate:
       ddl-auto: validate

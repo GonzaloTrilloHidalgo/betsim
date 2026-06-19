@@ -59,6 +59,23 @@ export ODDS_API_KEY=tu_api_key   # https://the-odds-api.com
 > Ojo al presupuesto del free tier (ver §2 del documento de arquitectura). El mercado de goleadores
 > queda planificado como v1.1 (requiere player props de pago + fuente de resultados de goleadores).
 
+## Despliegue en internet (Render)
+
+Para que tus amigos jueguen desde su móvil. El backend sirve también la PWA, así que es **un solo
+servicio** + base de datos, con HTTPS automático.
+
+1. Sube el repo a GitHub (rama con `render.yaml` y `Dockerfile` en la raíz).
+2. En [Render](https://render.com): **New +** → **Blueprint** → conecta este repositorio.
+   Render lee `render.yaml` y crea el servicio web + la base de datos PostgreSQL.
+3. En el servicio, define la variable secreta **`ODDS_API_KEY`** con tu clave de the-odds-api.com.
+4. Espera al primer despliegue. Tu URL será algo como `https://betsim.onrender.com`.
+   ¡Compártela con tus amigos! Desde el móvil pueden **instalarla** (Añadir a pantalla de inicio).
+
+Notas:
+- El plan gratuito de Render **duerme** el servicio tras un rato sin uso: la primera carga tras la
+  inactividad tarda ~30 s. Mientras duerme, los jobs no corren; al despertar se sincroniza solo.
+- La base de datos gratuita de Render dura 90 días (de sobra para el Mundial).
+
 ## Tests
 
 ```bash
