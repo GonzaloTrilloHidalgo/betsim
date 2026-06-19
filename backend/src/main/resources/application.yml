@@ -30,6 +30,8 @@ betsim:
   economy:
     starting-balance: 50.00
     daily-bonus: 10.00
+    # Solo se permite reiniciar el saldo (volver a 50) cuando te quedan menos de estas monedas.
+    reset-threshold: 5.00
   # Seguridad JWT. En producción, define BETSIM_JWT_SECRET (>= 32 bytes).
   jwt:
     secret: ${BETSIM_JWT_SECRET:dev-only-secret-change-me-please-32bytes-min!!}

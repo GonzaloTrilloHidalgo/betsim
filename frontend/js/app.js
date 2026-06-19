@@ -636,6 +636,11 @@ async function renderBilletera() {
       : `<button id="btn-bonus" disabled class="py-3 rounded-xl bg-slate-800/60 text-slate-400 font-semibold cursor-not-allowed leading-tight">
            <div>⏳ Próximo bono</div><div id="bonus-countdown" class="text-xs tabular-nums">--:--:--</div></button>`;
 
+    const resetBtn = wallet.puedeReiniciar
+      ? `<button id="btn-reset" class="py-3 rounded-xl bg-slate-800 font-semibold active:bg-slate-700">♻️ Reiniciar saldo</button>`
+      : `<button id="btn-reset" disabled class="py-3 rounded-xl bg-slate-800/60 text-slate-400 font-semibold cursor-not-allowed leading-tight">
+           <div>♻️ Reiniciar saldo</div><div class="text-[10px]">Solo con menos de 5 monedas</div></button>`;
+
     c.innerHTML = `
      <div class="mx-auto w-full max-w-2xl">
       <div class="bg-gradient-to-br from-green-700 to-green-600 rounded-2xl p-5 mb-4">
@@ -645,7 +650,7 @@ async function renderBilletera() {
       </div>
       <div class="grid grid-cols-2 gap-3 mb-5">
         ${bonoBtn}
-        <button id="btn-reset" class="py-3 rounded-xl bg-slate-800 font-semibold active:bg-slate-700">♻️ Reiniciar saldo</button>
+        ${resetBtn}
       </div>
       <p id="wallet-msg" class="text-center text-sm min-h-[1.25rem] mb-3"></p>
 
@@ -681,11 +686,13 @@ async function renderBilletera() {
       startBonusCountdown(wallet.proximoBono);
     }
 
-    $('#btn-reset').onclick = async () => {
-      try { await api('/wallet/reset', { method: 'POST' }); walletFlash = { msg: 'Saldo reiniciado', ok: true }; }
-      catch (e) { walletFlash = { msg: e.message, ok: false }; }
-      renderBilletera();
-    };
+    if (wallet.puedeReiniciar) {
+      $('#btn-reset').onclick = async () => {
+        try { await api('/wallet/reset', { method: 'POST' }); walletFlash = { msg: 'Saldo reiniciado a 50', ok: true }; }
+        catch (e) { walletFlash = { msg: e.message, ok: false }; }
+        renderBilletera();
+      };
+    }
     $('#btn-logout').onclick = logout;
   } catch (e) {
     c.innerHTML = `<div class="text-center text-red-400 py-10">${e.message}</div>`;

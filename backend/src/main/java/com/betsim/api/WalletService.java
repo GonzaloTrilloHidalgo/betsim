@@ -21,14 +21,17 @@ public class WalletService {
     private final TransaccionRepository transacciones;
     private final BigDecimal startingBalance;
     private final BigDecimal dailyBonus;
+    private final BigDecimal resetThreshold;
 
     public WalletService(UsuarioRepository usuarios, TransaccionRepository transacciones,
                          @Value("${betsim.economy.starting-balance}") BigDecimal startingBalance,
-                         @Value("${betsim.economy.daily-bonus}") BigDecimal dailyBonus) {
+                         @Value("${betsim.economy.daily-bonus}") BigDecimal dailyBonus,
+                         @Value("${betsim.economy.reset-threshold}") BigDecimal resetThreshold) {
         this.usuarios = usuarios;
         this.transacciones = transacciones;
         this.startingBalance = startingBalance;
         this.dailyBonus = dailyBonus;
+        this.resetThreshold = resetThreshold;
     }
 
     public Usuario require(Long userId) {
@@ -36,6 +39,13 @@ public class WalletService {
         return usuarios.findById(userId)
                 .orElseThrow(() -> ApiException.unauthorized("Sesión no válida: vuelve a iniciar sesión"));
     }
+
+    /** Solo se puede reiniciar el saldo cuando casi te has arruinado (por debajo del umbral). */
+    public boolean puedeReiniciar(Usuario u) {
+        return u.getSaldo().compareTo(resetThreshold) < 0;
+    }
+
+    public BigDecimal getResetThreshold() { return resetThreshold; }
 
     @Transactional
     public Usuario claimDailyBonus(Long userId) {
@@ -54,6 +64,10 @@ public class WalletService {
     @Transactional
     public Usuario reset(Long userId) {
         Usuario u = require(userId);
+        if (!puedeReiniciar(u)) {
+            throw ApiException.badRequest("Solo puedes reiniciar el saldo cuando tienes menos de "
+                    + resetThreshold.stripTrailingZeros().toPlainString() + " monedas");
+        }
         BigDecimal delta = startingBalance.subtract(u.getSaldo());
         u.setSaldo(startingBalance);
         usuarios.save(u);

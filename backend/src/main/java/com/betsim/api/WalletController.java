@@ -25,7 +25,8 @@ public class WalletController {
         this.transacciones = transacciones;
     }
 
-    public record WalletView(BigDecimal saldo, String username, boolean bonoDisponible, Instant proximoBono) {}
+    public record WalletView(BigDecimal saldo, String username, boolean bonoDisponible, Instant proximoBono,
+                             boolean puedeReiniciar) {}
     public record TxView(Long id, String tipo, BigDecimal importe, BigDecimal saldoResultante, Instant fecha) {}
 
     @GetMapping
@@ -33,12 +34,12 @@ public class WalletController {
         return walletView(wallet.require(me.userId()));
     }
 
-    /** Construye la vista de billetera incluyendo si el bono está disponible y cuándo toca el siguiente. */
+    /** Construye la vista de billetera: estado del bono y si se puede reiniciar el saldo. */
     private WalletView walletView(Usuario u) {
         LocalDate hoy = LocalDate.now(ZoneOffset.UTC);
         boolean disponible = u.getUltimoBono() == null || !u.getUltimoBono().equals(hoy);
         Instant proximo = disponible ? null : hoy.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-        return new WalletView(u.getSaldo(), u.getUsername(), disponible, proximo);
+        return new WalletView(u.getSaldo(), u.getUsername(), disponible, proximo, wallet.puedeReiniciar(u));
     }
 
     @GetMapping("/transactions")
