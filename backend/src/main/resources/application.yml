@@ -51,11 +51,13 @@ betsim:
   jobs:
     odds-interval: ${BETSIM_ODDS_INTERVAL:PT30M}
     settlement-interval: ${BETSIM_SETTLEMENT_INTERVAL:PT5M}
-  # football-data.org: resultados completos y cuadro del Mundial (solo visualización).
+  # football-data.org: resultados completos, cuadro y partidos en vivo del Mundial (solo visualización).
   football-data:
     api-key: ${FOOTBALL_DATA_API_KEY:}
     competition: ${FOOTBALL_DATA_COMPETITION:WC}
-    cache: ${FOOTBALL_DATA_CACHE:PT10M}
+    # Cache corto (1 min) para que "En vivo" vaya al día. Una sola llamada trae todos los partidos,
+    # así que entra de sobra en el límite gratuito (10 peticiones/min).
+    cache: ${FOOTBALL_DATA_CACHE:PT1M}
   cors:
     # "*" permite cualquier origen (cómodo para acceder desde el móvil por IP). Seguro con JWT en cabecera.
     allowed-origins: ${BETSIM_CORS_ORIGINS:*}
