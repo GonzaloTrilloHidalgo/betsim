@@ -168,6 +168,32 @@ class SettlementIntegrationTest {
         assertThat(apuestas.findById(btts.getId()).orElseThrow().getEstado()).isEqualTo(EstadoApuesta.GANADA);
     }
 
+    @Test
+    @org.springframework.transaction.annotation.Transactional
+    void seleccionFinalizadaSeResuelveAunqueLaCombinadaSigaPendiente() {
+        when(provider.fetchUpcomingMatches()).thenReturn(List.of());
+        Usuario u = nuevoUsuario("combicolor");
+        Long a = crearPartidoConMercado("CMB-A", "España", "Italia", new BigDecimal("2.00"));
+        Long b = crearPartidoConMercado("CMB-B", "Brasil", "Chile", new BigDecimal("2.00"));
+
+        Apuesta bet = betService.crear(u.getId(), new BigDecimal("10.00"), List.of(a, b));
+        assertThat(bet.getEstado()).isEqualTo(EstadoApuesta.PENDIENTE);
+
+        // Solo termina el partido A (España gana 2-0); B sigue por jugarse.
+        marcarComoEmpezado("CMB-A");
+        when(provider.fetchResult("CMB-A")).thenReturn(Optional.of(new ProviderResult("CMB-A", 2, 0)));
+        when(provider.fetchResult("CMB-B")).thenReturn(Optional.empty());
+        settlement.run();
+
+        Apuesta r = apuestas.findById(bet.getId()).orElseThrow();
+        assertThat(r.getEstado()).isEqualTo(EstadoApuesta.PENDIENTE); // la combinada sigue viva
+        for (Seleccion s : r.getSelecciones()) {
+            String ext = s.getOpcionCuota().getMercado().getPartido().getExternalId();
+            if (ext.equals("CMB-A")) assertThat(s.getResultado()).isEqualTo(ResultadoSeleccion.ACERTADA);
+            else assertThat(s.getResultado()).isEqualTo(ResultadoSeleccion.PENDIENTE);
+        }
+    }
+
     private OpcionCuota opcionLinea(Mercado m, String codigo, String desc, BigDecimal cuota, BigDecimal linea) {
         OpcionCuota o = opcion(m, codigo, desc, cuota);
         o.setLinea(linea);

@@ -2,6 +2,7 @@ package com.betsim.repository;
 
 import com.betsim.domain.Apuesta;
 import com.betsim.domain.Enums.EstadoApuesta;
+import com.betsim.domain.Enums.ResultadoSeleccion;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,13 +16,14 @@ public interface ApuestaRepository extends JpaRepository<Apuesta, Long> {
     List<Apuesta> findByEstadoOrderByCreadoEnDesc(EstadoApuesta estado);
     Optional<Apuesta> findByIdAndUsuarioId(Long id, Long usuarioId);
 
+    /** Apuestas (en cualquier estado) con alguna selección de este partido aún sin resolver. */
     @Query("""
            select distinct a from Apuesta a
            join a.selecciones s
            join s.opcionCuota o
            join o.mercado m
-           where m.partido.id = :partidoId and a.estado = :estado
+           where m.partido.id = :partidoId and s.resultado = :resultado
            """)
-    List<Apuesta> findPendingByPartido(@Param("partidoId") Long partidoId,
-                                       @Param("estado") EstadoApuesta estado);
+    List<Apuesta> findWithSelectionResultByPartido(@Param("partidoId") Long partidoId,
+                                                   @Param("resultado") ResultadoSeleccion resultado);
 }

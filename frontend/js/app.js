@@ -15,6 +15,7 @@ const store = {
 // Estado en memoria
 let slip = [];          // [{opcionCuotaId, label, cuota}]
 let currentTab = 'cartelera';
+let cfg = { maxSelecciones: 6 };  // límites del juego (se cargan de /config)
 
 /* ---------------- HTTP ---------------- */
 async function api(path, { method = 'GET', body, auth = true, retry = true } = {}) {
@@ -60,6 +61,20 @@ function fmtDate(iso) {
          d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 }
 const ESTADO_COLOR = { PENDIENTE: 'text-amber-400', GANADA: 'text-green-400', PERDIDA: 'text-red-400', ANULADA: 'text-slate-400' };
+// Color por resultado de cada selección (verde acertada / rojo fallada / gris pendiente).
+const SEL_COLOR = { ACERTADA: 'text-green-400', FALLADA: 'text-red-400', ANULADA: 'text-slate-500', PENDIENTE: 'text-slate-300' };
+
+// Filas de selecciones de un boleto, coloreadas según su resultado.
+function selRows(selecciones) {
+  return selecciones.map((s) => {
+    const color = SEL_COLOR[s.resultado] || 'text-slate-300';
+    const icon = s.resultado === 'ACERTADA' ? '✅ ' : s.resultado === 'FALLADA' ? '❌ ' : s.resultado === 'ANULADA' ? '➖ ' : '';
+    return `<div class="flex justify-between text-sm py-1 border-t border-slate-700/60">
+        <span class="${color} pr-2">${icon}${s.descripcion}</span>
+        <span class="${color} font-semibold">${fmt(s.cuota)}</span>
+      </div>`;
+  }).join('');
+}
 
 /* ---------------- Banderas ---------------- */
 // Mapa selección -> código de país (ISO alpha-2; sub-regiones de UK con gb-xxx).
@@ -430,7 +445,12 @@ function toggleSelection(btn) {
   } else {
     // Combinada del mismo partido permitida, pero solo UNA por grupo correlacionado: al elegir otra
     // opción del mismo partido+grupo (Más/Menos, 1X/12/X2, Sí/No, o 1X2 vs Doble oportunidad) la sustituye.
-    slip = slip.filter((s) => !(s.matchId === matchId && s.group === group));
+    const filtered = slip.filter((s) => !(s.matchId === matchId && s.group === group));
+    if (filtered.length >= cfg.maxSelecciones) {
+      toast(`Máximo ${cfg.maxSelecciones} selecciones por combinada`);
+      return;
+    }
+    slip = filtered;
     slip.push({ opcionCuotaId: id, matchId, group, label: btn.dataset.label, cuota: Number(btn.dataset.cuota) });
   }
   refreshOddButtons();
@@ -555,11 +575,7 @@ async function renderApuestas() {
 }
 
 function feedCard(b) {
-  const sels = b.selecciones.map((s) => `
-    <div class="flex justify-between text-sm py-1 border-t border-slate-700/60">
-      <span class="text-slate-300 pr-2">${s.descripcion}</span>
-      <span class="text-slate-200 font-semibold">${fmt(s.cuota)}</span>
-    </div>`).join('');
+  const sels = selRows(b.selecciones);
   return `
     <div class="bg-slate-800 rounded-2xl p-4 mb-3">
       <div class="flex justify-between items-center mb-1">
@@ -577,11 +593,7 @@ function feedCard(b) {
 }
 
 function betCard(b) {
-  const sels = b.selecciones.map((s) => `
-    <div class="flex justify-between text-sm py-1 border-t border-slate-700/60">
-      <span class="text-slate-300 pr-2">${s.descripcion}</span>
-      <span class="${ESTADO_COLOR[s.resultado] || 'text-slate-400'} font-semibold">${fmt(s.cuota)}</span>
-    </div>`).join('');
+  const sels = selRows(b.selecciones);
   return `
     <div class="bg-slate-800 rounded-2xl p-4 mb-3">
       <div class="flex justify-between items-center mb-1">
@@ -712,8 +724,25 @@ async function refreshBalance() {
 function enterApp() {
   $('#auth-screen').classList.add('hidden');
   $('#app').classList.remove('hidden');
+  loadConfig();
   refreshBalance();
   selectTab('cartelera');
+}
+async function loadConfig() { try { cfg = await api('/config'); } catch {} }
+
+// Mensaje breve flotante.
+function toast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-700 text-white text-sm px-4 py-2 rounded-full shadow-lg transition-opacity duration-300';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._h);
+  t._h = setTimeout(() => { t.style.opacity = '0'; }, 2200);
 }
 function logout() { store.clear(); slip = []; location.reload(); }
 

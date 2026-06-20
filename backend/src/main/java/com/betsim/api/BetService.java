@@ -4,6 +4,7 @@ import com.betsim.domain.*;
 import com.betsim.domain.Enums.*;
 import com.betsim.repository.*;
 import com.betsim.web.ApiException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,13 +23,16 @@ public class BetService {
     private final ApuestaRepository apuestas;
     private final OpcionCuotaRepository opciones;
     private final TransaccionRepository transacciones;
+    private final int maxSelecciones;
 
     public BetService(UsuarioRepository usuarios, ApuestaRepository apuestas,
-                      OpcionCuotaRepository opciones, TransaccionRepository transacciones) {
+                      OpcionCuotaRepository opciones, TransaccionRepository transacciones,
+                      @Value("${betsim.bet.max-selecciones}") int maxSelecciones) {
         this.usuarios = usuarios;
         this.apuestas = apuestas;
         this.opciones = opciones;
         this.transacciones = transacciones;
+        this.maxSelecciones = maxSelecciones;
     }
 
     /**
@@ -45,6 +49,9 @@ public class BetService {
         }
         if (new HashSet<>(opcionIds).size() != opcionIds.size()) {
             throw ApiException.badRequest("Hay selecciones duplicadas");
+        }
+        if (opcionIds.size() > maxSelecciones) {
+            throw ApiException.badRequest("Máximo " + maxSelecciones + " selecciones por combinada");
         }
 
         Usuario u = usuarios.findById(userId)

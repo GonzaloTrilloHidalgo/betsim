@@ -60,8 +60,9 @@ public class SettlementService {
         p.setGolesVisitante(res.golesVisitante());
         p.setEstado(EstadoPartido.FINALIZADO);
 
-        for (Apuesta a : apuestas.findPendingByPartido(p.getId(), EstadoApuesta.PENDIENTE)) {
-            // Resolver las selecciones de ESTE partido según el tipo de mercado.
+        // Resolvemos cada selección de ESTE partido (acertada/fallada), aunque la combinada siga
+        // pendiente o ya esté perdida, para que se vea su color. Solo recalculamos las que siguen vivas.
+        for (Apuesta a : apuestas.findWithSelectionResultByPartido(p.getId(), ResultadoSeleccion.PENDIENTE)) {
             for (Seleccion s : a.getSelecciones()) {
                 if (s.getResultado() != ResultadoSeleccion.PENDIENTE) continue;
                 Partido sp = s.getOpcionCuota().getMercado().getPartido();
@@ -69,7 +70,7 @@ public class SettlementService {
                 boolean acierto = acierta(s.getOpcionCuota(), res.golesLocal(), res.golesVisitante());
                 s.setResultado(acierto ? ResultadoSeleccion.ACERTADA : ResultadoSeleccion.FALLADA);
             }
-            recalcularApuesta(a);
+            if (a.getEstado() == EstadoApuesta.PENDIENTE) recalcularApuesta(a);
         }
 
         cerrarMercados(p, EstadoMercado.LIQUIDADO);

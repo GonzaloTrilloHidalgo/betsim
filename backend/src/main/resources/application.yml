@@ -32,6 +32,9 @@ betsim:
     daily-bonus: 10.00
     # Solo se permite reiniciar el saldo (volver a 50) cuando te quedan menos de estas monedas.
     reset-threshold: 5.00
+  bet:
+    # Máximo de selecciones por combinada.
+    max-selecciones: 6
   # Seguridad JWT. En producción, define BETSIM_JWT_SECRET (>= 32 bytes).
   jwt:
     secret: ${BETSIM_JWT_SECRET:dev-only-secret-change-me-please-32bytes-min!!}
